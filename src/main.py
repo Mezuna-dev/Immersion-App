@@ -13,3 +13,7 @@ print(card_id1)
 print(card_id2)
 
 print(database.get_all_decks())
+
+print(database.get_cards_by_deck(1))
+
+print(database.get_deck_by_id(2))

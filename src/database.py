@@ -124,6 +124,26 @@ def get_all_decks():
     con.close()
     return decks
 
+def get_deck_by_id(id):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT ID, Name, Date_Created FROM Deck
+        WHERE ID=?
+    """, (id,))
+
+    row = cur.fetchone()
+
+    if row is None:
+        con.close()
+        return None
+    else:
+        deck = models.Deck(row[0], row[1], row[2])
+        
+        con.close()
+        return deck
+
 # --- Card Functions --------------------------------
 
 def create_card(deck_id: int, front: str, back: str):
@@ -141,3 +161,25 @@ def create_card(deck_id: int, front: str, back: str):
     con.close()
     
     return new_card_id
+
+def get_cards_by_deck(deck_id):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cards = []
+
+    cur.execute("""
+        SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, 
+        Ease_Factor, Interval, Due_Date, Is_New, Date_Created, 
+        Last_Reviewed FROM Card
+        WHERE Deck_ID=?
+        """, (deck_id,))
+    
+    rows = cur.fetchall()
+    
+    for row in rows:
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        cards.append(card)
+
+    con.close()
+    return cards
