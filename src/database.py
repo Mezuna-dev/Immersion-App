@@ -183,3 +183,112 @@ def get_cards_by_deck(deck_id):
 
     con.close()
     return cards
+
+def get_card_by_id(id):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, 
+        Ease_Factor, Interval, Due_Date, Is_New, Date_Created, 
+        Last_Reviewed FROM Card
+        WHERE ID=?
+        """, (id,))
+
+    row = cur.fetchone()
+    con.close()
+
+    if row is None:
+        return None
+    else:
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        return card
+    
+def get_due_cards(deck_id=None):
+    todays_date = date.today().strftime('%Y-%m-%d')
+
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cards = []
+
+    query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed FROM Card " \
+    "WHERE Due_Date <= ? AND Due_Date IS NOT NULL"
+
+    query_params = [todays_date]
+
+    if deck_id is not None:
+        query_string += " AND Deck_ID=?"
+        query_params.append(deck_id)
+
+    cur.execute(query_string, query_params)
+        
+    rows = cur.fetchall()
+    
+    for row in rows:
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        cards.append(card)
+
+    con.close()
+    return cards
+
+def get_new_cards(deck_id=None, limit=None):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cards = []
+
+    query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed FROM Card " \
+    "WHERE Is_New = 1 AND Due_Date IS NULL"
+
+    query_params = []
+
+    if deck_id is not None:
+        query_string += " AND Deck_ID=?"
+        query_params.append(deck_id)
+    if limit is not None:
+        query_string += " LIMIT ?"
+        query_params.append(limit)
+
+    cur.execute(query_string, query_params)
+        
+    rows = cur.fetchall()
+    
+    for row in rows:
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        cards.append(card)
+
+    con.close()
+    return cards
+
+def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, new_due_date, is_new):
+    todays_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        UPDATE Card
+        SET Reps = ?, Ease_Factor = ?, Interval = ?, Due_Date = ?, 
+        Is_New = ?, Last_Reviewed = ?
+        WHERE ID=?
+        """, (new_reps, new_ease_factor, new_interval, new_due_date, is_new, todays_date, card_id))
+    
+    con.commit()
+    con.close()
+
+# --- Review Functions --------------------------------
+
+def create_review(card_id, rating, interval_after, ease_factor_after):
+    review_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        INSERT INTO Review (Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After)
+        VALUES (?, ?, ?, ?, ?)
+    """, (card_id, review_date, rating, interval_after, ease_factor_after))
+
+    con.commit()
+    con.close()

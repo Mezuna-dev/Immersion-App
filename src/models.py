@@ -25,6 +25,6 @@ class Card:
 
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nDeck Id: {self.deck_id}\nFront: {self.card_front}\n \
-Back: {self.card_back}\nReps: {self.reps}\nEase Factor: {self.ease_factor}\n \
-Interval: {self.interval}\nDue Date: {self.due_date}\nIs New: {self.is_new}\n \
-Date Created: {self.date_created}\nLast Reviewed: {self.last_reviewed}\n"
+        Back: {self.card_back}\nReps: {self.reps}\nEase Factor: {self.ease_factor}\n \
+        Interval: {self.interval}\nDue Date: {self.due_date}\nIs New: {self.is_new}\n \
+        Date Created: {self.date_created}\nLast Reviewed: {self.last_reviewed}\n"
