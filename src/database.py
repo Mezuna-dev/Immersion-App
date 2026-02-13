@@ -1,7 +1,9 @@
 from pathlib import Path
 import sqlite3
 
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(f"{BASE_DIR}/data").mkdir(parents=True, exist_ok=True)
 DB_PATH = BASE_DIR / 'data' / 'app.db'
 
 def create_db_connection():
