@@ -33,7 +33,7 @@ def initialize_database():
         # Deck Table
         cur.execute("""
             CREATE TABLE Deck (
-                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL,
                 Date_Created TEXT NOT NULL
                 )
@@ -42,14 +42,14 @@ def initialize_database():
         # Card Table
         cur.execute("""
             CREATE TABLE Card (
-                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
                 Deck_ID INT NOT NULL,
                 Card_Front TEXT NOT NULL,
                 Card_Back TEXT NOT NULL,
                 Reps INT NOT NULL DEFAULT 0,
                 Ease_Factor FLOAT NOT NULL DEFAULT 2.5,
                 Interval INT NOT NULL DEFAULT 0,
-                Due_Date TEXT NOT NULL,
+                Due_Date TEXT,
                 Is_New BOOL NOT NULL DEFAULT 1,
                 Date_Created TEXT NOT NULL,
                 Last_Reviewed TEXT,
@@ -60,7 +60,7 @@ def initialize_database():
         # Review Table
         cur.execute("""
             CREATE TABLE Review ( 
-                ID INTEGER PRIMARY KEY AUTOINCREMENT, 
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT, 
                 Card_ID INT NOT NULL,
                 Review_Date TEXT NOT NULL,
                 Rating INT NOT NULL,
