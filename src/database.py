@@ -1,6 +1,11 @@
 from pathlib import Path
+from datetime import date
 import sqlite3
+import models
 
+# ===========================================================
+# Section: Create Database File and Directory
+# ===========================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 Path(f"{BASE_DIR}/data").mkdir(parents=True, exist_ok=True)
@@ -8,7 +13,12 @@ DB_PATH = BASE_DIR / 'data' / 'app.db'
 
 def create_db_connection():
     con = sqlite3.connect(DB_PATH)
+    con.execute("PRAGMA foreign_keys = ON;")
     return con
+
+# ===========================================================
+# Section: Database Initialization
+# ===========================================================
 
 # Check for database
 def db_exists(table_name: str):
@@ -72,3 +82,62 @@ def initialize_database():
 
         con.commit()
         con.close()
+
+
+# ===========================================================
+# Section: Database CRUD Functions
+# ===========================================================
+
+
+# --- Deck Functions --------------------------------
+
+def create_deck(name: str):
+    creation_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        INSERT INTO Deck (Name, Date_Created)
+        VALUES (?, ?)
+    """, (name, creation_date))
+
+    con.commit()
+    new_deck_id = cur.lastrowid
+    con.close()
+
+    return new_deck_id
+
+
+def get_all_decks():
+    con = create_db_connection()
+    cur = con.cursor()
+
+    decks = []
+
+    cur.execute("""SELECT ID, Name, Date_Created FROM Deck""")
+    rows = cur.fetchall()
+    
+    for row in rows:
+        deck = models.Deck(row[0], row[1], row[2])
+        decks.append(deck)
+
+    con.close()
+    return decks
+
+# --- Card Functions --------------------------------
+
+def create_card(deck_id: int, front: str, back: str):
+    creation_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        INSERT INTO Card (Deck_ID, Card_Front, Card_Back, Date_Created)
+        VALUES (?, ?, ?, ?)
+    """, (deck_id, front, back, creation_date))
+
+    con.commit()
+    new_card_id = cur.lastrowid
+    con.close()
+    
+    return new_card_id
