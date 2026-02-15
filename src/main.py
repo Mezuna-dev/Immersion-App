@@ -1,19 +1,6 @@
 import database
+import cli
 
-database.initialize_database()
-
-deck_id1 = database.create_deck("Kaishi")
-deck_id2 = database.create_deck("Core2k/6k")
-
-card_id1 = database.create_card(1, "Arigato", "Thank you")
-card_id2 = database.create_card(1, "Arigato Gozaimsu", "Polite Thank you")
-
-print(deck_id1)
-print(card_id1)
-print(card_id2)
-
-print(database.get_all_decks())
-
-print(database.get_cards_by_deck(1))
-
-print(database.get_deck_by_id(2))
+if __name__ == "__main__":
+    database.initialize_database()
+    cli.main_menu()
