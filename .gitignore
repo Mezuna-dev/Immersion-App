@@ -40,7 +40,7 @@ ENV/
 htmlcov/
 .tox/
 
-# User data (if you want to keep example data in git, be specific about what to ignore)
+# User data
 data/*.db
 data/*.sqlite
 data/media/*
