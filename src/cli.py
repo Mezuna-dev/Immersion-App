@@ -1,4 +1,6 @@
 import database
+import scheduler
+import ankiimport
 
 def main_menu():
     """Display main menu and handle user choices"""
@@ -11,7 +13,8 @@ def main_menu():
         print("3. Add cards to a deck")
         print("4. Review cards")
         print("5. Show statistics")
-        print("6. Exit")
+        print("6. Import Anki Deck")
+        print("7. Exit")
         print("="*50)
         
         choice = input("\nEnter your choice (1-6): ").strip()
@@ -27,10 +30,12 @@ def main_menu():
         elif choice == "5":
             show_stats_menu()
         elif choice == "6":
+            import_anki_deck()
+        elif choice == "7":
             print("\nGoodbye")
             break
         else:
-            print("\nInvalid choice. Please enter a number from 1-6.")
+            print("\nInvalid choice. Please enter a number from 1-7.")
 
 
 def create_deck_menu():
@@ -91,9 +96,50 @@ def add_cards_menu():
         print(f'\n New Card | ID: {new_card_id} has been created successfully!')
 
 def review_menu():
-    print("\n--- Review Cards ---")
-    # TODO: Implement review session
-    print("Feature not yet implemented")
+    print('\n--- Review Flashcards ---:')
+    print("\nAvaliable Decks:")
+
+    decks = database.get_all_decks()
+
+    for deck in decks:
+        print(f"\n{deck.name} | Deck ID: {deck.id}")
+
+    try:
+        deck_id = int(input('\nWhich deck would you like to review (Use the deck ID): ').strip())
+        deck_check = database.get_deck_by_id(deck_id)
+
+        while deck_check is None:
+            deck_id = int(input('\nInvalid deck id. Please enter a deck from the previous list: '))
+            deck_check = database.get_deck_by_id(deck_id)
+    except ValueError:
+        print("Error: Please enter a valid number!")
+        return
+    
+    review_cards = database.get_due_cards(deck_id)
+    new_cards = database.get_new_cards(deck_id, limit=10)
+
+    all_cards = review_cards + new_cards
+
+    for card in all_cards:
+        print(card.card_front)
+        input('Press enter to reveal card back...')
+        print(card.card_back)
+        try:
+            rating = input('Rating? "Again" (0) or "Good" (4): ').strip()
+
+            while rating != "0" and rating != "4":
+                rating = input('Please answer with "Again" (0) or "Good" (4):').strip()
+            
+            rating = int(rating)
+
+            new_reps, new_ease_factor, new_interval, due_date = scheduler.calculate_next_review(card.reps, card.ease_factor, card.interval, rating)
+
+            database.update_card_after_review(card.id, new_reps, new_ease_factor, new_interval, due_date, is_new=0)
+            database.create_review(card.id, rating, new_interval, new_ease_factor)
+
+        except ValueError:
+            print("Error: Please enter a valid number!")
+            return
 
 
 def show_stats_menu():
@@ -112,7 +158,16 @@ def show_stats_menu():
     new_cards = database.get_new_cards(limit = 20)
     print(f'\nNew cards available: {len(new_cards)}')
     
-
+    
+def import_anki_deck():
+    apkg_path = input('Please provide path to apkg file: ').strip()
+    db_path = ankiimport.extract_apkg(apkg_path)
+    if db_path:
+        ankiimport.explore_anki_database(db_path)
+    # Then continue with import
+    ankiimport.import_anki_deck(apkg_path)
 
 if __name__ == "__main__":
     main_menu()
+
+

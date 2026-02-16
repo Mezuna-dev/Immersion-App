@@ -27,4 +27,4 @@ def calculate_next_review(reps, ease_factor, interval, rating):
     
     due_date = (todays_date + timedelta(days=new_interval)).strftime('%Y-%m-%d')
 
-    return new_reps, new_interval, new_ease_factor, due_date
+    return new_reps, new_ease_factor, new_interval, due_date
