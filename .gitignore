@@ -44,6 +44,7 @@ htmlcov/
 data/*.db
 data/*.sqlite
 data/media/*
+imported/*
 
 # Logs
 *.log

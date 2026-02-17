@@ -263,6 +263,18 @@ def get_new_cards(deck_id=None, limit=None):
     con.close()
     return cards
 
+def delete_card(card_id):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        DELETE FROM Card
+        WHERE ID=?
+    """, (card_id,))
+
+    con.commit()
+    con.close()
+
 def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, new_due_date, is_new):
     todays_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()

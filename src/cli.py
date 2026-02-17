@@ -13,11 +13,12 @@ def main_menu():
         print("3. Add cards to a deck")
         print("4. Review cards")
         print("5. Show statistics")
-        print("6. Import Anki Deck")
-        print("7. Exit")
+        print("6. Delete a card")
+        print("7. Import Anki Deck")
+        print("8. Exit")
         print("="*50)
         
-        choice = input("\nEnter your choice (1-6): ").strip()
+        choice = input("\nEnter your choice (1-8): ").strip()
         
         if choice == "1":
             create_deck_menu()
@@ -30,12 +31,14 @@ def main_menu():
         elif choice == "5":
             show_stats_menu()
         elif choice == "6":
-            import_anki_deck()
+            delete_card_menu()
         elif choice == "7":
+            import_anki_deck()
+        elif choice == "8":
             print("\nGoodbye")
             break
         else:
-            print("\nInvalid choice. Please enter a number from 1-7.")
+            print("\nInvalid choice. Please enter a number from 1-8.")
 
 
 def create_deck_menu():
@@ -157,14 +160,27 @@ def show_stats_menu():
 
     new_cards = database.get_new_cards(limit = 20)
     print(f'\nNew cards available: {len(new_cards)}')
+
+def delete_card_menu():
+    print("\n--- Delete a Card ---")
+    try:
+        card_id = int(input('Enter the ID of the card you want to delete: ').strip())
+        card_check = database.get_card_by_id(card_id)
+
+        while card_check is None:
+            card_id = int(input('Invalid card id. Please enter a valid card ID: ').strip())
+            card_check = database.get_card_by_id(card_id)
+        
+        database.delete_card(card_id)
+        print(f'Card with ID {card_id} has been deleted successfully!')
+
+    except ValueError:
+        print("Error: Please enter a valid number!")
+        return
     
     
 def import_anki_deck():
     apkg_path = input('Please provide path to apkg file: ').strip()
-    db_path = ankiimport.extract_apkg(apkg_path)
-    if db_path:
-        ankiimport.explore_anki_database(db_path)
-    # Then continue with import
     ankiimport.import_anki_deck(apkg_path)
 
 if __name__ == "__main__":
