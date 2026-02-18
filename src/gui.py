@@ -6,7 +6,7 @@ from PyQt6.QtWebChannel import QWebChannel
 from pathlib import Path
 import sys
 import database
-import ankiimport
+import anki_importer
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -77,7 +77,7 @@ class ImportThread(QThread):
 
     def run(self):
         try:
-            ankiimport.import_anki_deck(self.apkg_path)
+            anki_importer.import_anki_deck(self.apkg_path)
             self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))
@@ -155,6 +155,7 @@ class ReviewWidget(QWidget):
         layout.addWidget(title_label)
 
         self.setLayout(layout)
+
 
 def main():
     app = QApplication(sys.argv)
