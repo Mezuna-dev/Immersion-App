@@ -1,6 +1,6 @@
 from pydoc import html
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, \
-QLabel, QStackedWidget, QFileDialog, QProgressDialog, QMessageBox
+QLabel, QStackedWidget, QFileDialog, QProgressDialog, QMessageBox, QMenu
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
