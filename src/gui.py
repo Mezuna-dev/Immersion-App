@@ -1,6 +1,7 @@
+from pydoc import html
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, \
 QLabel, QStackedWidget, QFileDialog, QProgressDialog, QMessageBox
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
 from pathlib import Path
@@ -113,16 +114,21 @@ class DashboardWidget(QWidget):
         due_cards = database.get_due_cards()
         new_cards = database.get_new_cards(limit=20)
 
-        page_path = Path(__file__).parent.parent / "pages" / "dashboard.html"
+        page_path = Path(__file__).parent.parent / "pages" / "test.html"
         with open(page_path, "r") as f:
             html = f.read()
 
-
+        # Replace placeholders with actual data
         html = html.replace("{{due_cards}}", str(len(due_cards)))
         html = html.replace("{{new_cards}}", str(len(new_cards)))
 
+        # Save processed HTML temporarily
+        temp_path = Path(__file__).parent.parent / 'pages' / 'dashboard_temp.html'
+        with open(temp_path, 'w') as f:
+            f.write(html)
         
-        self.web_view.setHtml(html)
+        # Load with URL so relative paths work
+        self.web_view.setUrl(QUrl.fromLocalFile(str(temp_path.absolute())))
     
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_F5:  # Press F5 to reload
