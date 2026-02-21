@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
 
         self.dashboard_widget.start_review_signal.connect(self.show_review_screen)
 
+
     def show_review_screen(self):
         self.stacked_widget.setCurrentIndex(1)  # Switch to review screen
     
