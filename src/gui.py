@@ -1,13 +1,11 @@
-from pydoc import html
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, \
-QLabel, QStackedWidget, QFileDialog, QProgressDialog, QMessageBox, QMenu
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, pyqtSlot, QUrl
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebChannel import QWebChannel
-from pathlib import Path
+from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget, \
+    QFileDialog, QProgressDialog, QMessageBox
 import sys
 import database
-import anki_importer
+from widgets.dashboard import DashboardWidget
+from widgets.review import ReviewWidget
+from utils.import_thread import ImportThread
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -15,10 +13,13 @@ class MainWindow(QMainWindow):
         database.initialize_database()
 
         self.setWindowTitle("Immersion Suite")
-
         self.showMaximized()
-        self.menu_bar = self.menuBar()
+        
+        self.setup_menu()
+        self.setup_widgets()
 
+    def setup_menu(self):
+        self.menu_bar = self.menuBar()
         self.file_menu = self.menu_bar.addMenu("File")
         self.edit_menu = self.menu_bar.addMenu("Edit")
         self.view_menu = self.menu_bar.addMenu("View")
@@ -30,7 +31,9 @@ class MainWindow(QMainWindow):
         import_action.triggered.connect(self.import_deck)
         exit_action.triggered.connect(self.close)
 
+    def setup_widgets(self):
         self.stacked_widget = QStackedWidget()
+        
         self.dashboard_widget = DashboardWidget()
         self.review_widget = ReviewWidget()
 
@@ -39,15 +42,22 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.stacked_widget)
 
-        self.dashboard_widget.start_review_signal.connect(self.show_review_screen)
+        # Connect signals
+        self.dashboard_widget.show_srs_signal.connect(self.show_srs_screen)
+        self.review_widget.go_to_dashboard_signal.connect(self.show_dashboard_screen)
 
+    def show_dashboard_screen(self):
+        self.stacked_widget.setCurrentIndex(0)
 
-    def show_review_screen(self):
-        self.stacked_widget.setCurrentIndex(1)  # Switch to review screen
+    def show_srs_screen(self):
+        self.stacked_widget.setCurrentIndex(1)
     
     def import_deck(self):
-        apkg_path = QFileDialog.getOpenFileName(self, "Import Anki Deck", "", "Anki Decks (*.apkg)")[0]
-        if apkg_path == "":
+        apkg_path = QFileDialog.getOpenFileName(
+            self, "Import Anki Deck", "", "Anki Decks (*.apkg)"
+        )[0]
+        
+        if not apkg_path:
             return
 
         self.progress = QProgressDialog("Importing deck...", "Cancel", 0, 0, self)
@@ -67,112 +77,17 @@ class MainWindow(QMainWindow):
     
     def import_error(self, error_message):
         self.progress.close()
-        QMessageBox.critical(self, "Import Error", f"An error occurred while importing the deck:\n{error_message}")
-
-class ImportThread(QThread):
-    finished = pyqtSignal()
-    error = pyqtSignal(str)
-
-    def __init__(self, apkg_path):
-        super().__init__()
-        self.apkg_path = apkg_path
-
-    def run(self):
-        try:
-            anki_importer.import_anki_deck(self.apkg_path)
-            self.finished.emit()
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class DashboardWidget(QWidget):
-    start_review_signal = pyqtSignal()
-    
-    def __init__(self):
-        super().__init__()
-        self.init_ui()
-    
-    def init_ui(self):
-        layout = QVBoxLayout()
-        
-        # Create web view
-        self.web_view = QWebEngineView()
-
-        self.bridge = DashboardBridge(self)
-
-        self.channel = QWebChannel()
-        self.channel.registerObject("bridge", self.bridge)
-
-        self.web_view.page().setWebChannel(self.channel)
-        
-        # Load initial HTML
-        self.update_stats()
-        
-        layout.addWidget(self.web_view)
-        self.setLayout(layout)
-    
-    def update_stats(self):
-        due_cards = database.get_due_cards()
-        new_cards = database.get_new_cards(limit=20)
-
-        page_path = Path(__file__).parent.parent / "web" / "pages" / "test.html"
-        with open(page_path, "r") as f:
-            html = f.read()
-
-        # Replace placeholders with actual data
-        html = html.replace("{{due_cards}}", str(len(due_cards)))
-        html = html.replace("{{new_cards}}", str(len(new_cards)))
-
-        # Save processed HTML temporarily
-        temp_path = Path(__file__).parent.parent / 'web' / 'pages' / 'dashboard_temp.html'
-        with open(temp_path, 'w') as f:
-            f.write(html)
-        
-        # Load with URL so relative paths work
-        self.web_view.setUrl(QUrl.fromLocalFile(str(temp_path.absolute())))
-    
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_F5:  # Press F5 to reload
-            self.update_stats()
-
-class DashboardBridge(QObject):
-    def __init__(self, parent_widget):
-        super().__init__()
-        self.parent_widget = parent_widget
-
-    @pyqtSlot()
-    def startReview(self):
-        self.parent_widget.start_review_signal.emit()
-    
-    @pyqtSlot()
-    def browseDeck(self):
-        # Placeholder for browse deck functionality
-        QMessageBox.information(self.parent_widget, "Browse Deck", "This feature is not implemented yet.")
-
-class ReviewWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-
-        self.init_ui()
-    
-    def init_ui(self):
-        layout = QVBoxLayout()
-
-        title_label = QLabel("Review Session")
-        layout.addWidget(title_label)
-
-        self.setLayout(layout)
+        QMessageBox.critical(
+            self, "Import Error", 
+            f"An error occurred while importing the deck:\n{error_message}"
+        )
 
 
 def main():
     app = QApplication(sys.argv)
-
     window = MainWindow()
-
     window.show()
-
     app.exec()
-
 
 
 if __name__ == "__main__":

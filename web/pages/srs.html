@@ -7,13 +7,23 @@
     <link href="../styles/bootstrap/css/bootstrap.css" rel="stylesheet">
     <link href="../styles/custom/dashboard.css" rel="stylesheet">
     <script src="../styles/bootstrap/js/bootstrap.bundle.js"></script>
+    <!-- Qt Web Channel -->
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
-
-    <title>Immersion App</title>
+    <title>Review - Immersion App</title>
 
     <script>
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        var bridge;
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            bridge = channel.objects.bridge;
+        });
+        
+        function goToDashboard() {
+            if (bridge) bridge.goToDashboard();
         }
     </script>
 </head>
@@ -21,16 +31,14 @@
     <div class="container-fluid p-4 bg-dashboard">
         <div class="row">
             <div class="col-md-2 sidebar-color text-white rounded shadow sidebar-container" id="sidebar" style="height: calc(100vh - 2rem);">
-                <!-- Hamburger button - always visible -->
                 <button class="btn btn-dark toggle-btn" onclick="toggleSidebar()">
                     ☰
                 </button>
                 
-                <!-- Content that will hide -->
                 <div class="sidebar-content">
                     <div class="h1 pt-3 m-3 text-left h1-font">Anki</div>
                     <div class="list-group sidebar-buttons">
-                        <a href="#" class="btn btn-dark dashboard-buttons">Dashboard</a>
+                        <a href="#" class="btn btn-dark dashboard-buttons" onclick="goToDashboard()">Dashboard</a>
                         <a href="#" class="btn btn-dark dashboard-buttons">SRS</a>
                         <a href="#" class="btn btn-dark dashboard-buttons">Immersion</a>
                         <a href="#" class="btn btn-dark dashboard-buttons">Settings</a>
@@ -40,27 +48,10 @@
             </div>
             <div class="col bg-main p-5" style="height: calc(100vh - 2rem); overflow-y: hidden;">
                 <div class="text-white">
-                    <h1 class="mb-4">Dashboard</h1>
+                    <h1 class="mb-4">Review Session</h1>
                     
-                    <!-- Stats cards -->
-                    <div class="row">
-                        <div class="col-md-4 mb-4">
-                            <div class="card text-white" style="background-color: #9067C6;">
-                                <div class="card-body">
-                                    <h5>Cards Due</h5>
-                                    <p class="display-4">{{due_cards}}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-4">
-                            <div class="card text-white" style="background-color: #9067C6;">
-                                <div class="card-body">
-                                    <h5>New Cards</h5>
-                                    <p class="display-4">{{new_cards}}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Review content will go here -->
+                    <p>Review screen content...</p>
                 </div>
             </div>
         </div>

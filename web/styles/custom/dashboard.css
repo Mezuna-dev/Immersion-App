@@ -28,7 +28,7 @@
     font-weight: 500;
     text-align: left;
     margin-bottom: 1rem;
-    background-color: rgba(255, 255, 255, 0.1) !important;
+    background-color: #242038 !important;
     border: none !important;
     border-radius: 8px;
     padding: 12px 20px;
@@ -91,13 +91,17 @@ body {
 }
 
 .toggle-btn {
+    --bs-btn-color: #242038;
+    --bs-btn-active-border-color: #242038;
+    --bs-btn-active-color: #242038;
+    --bs-btn-active-bg: transparent;
     background-color: transparent !important;
-    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    border: 2px solid #242038 !important;
     font-size: 1.5rem;
     transition: all 0.3s ease;
     outline: none !important;
     box-shadow: none !important;
-    margin: 1rem 0 1rem 1rem;  /* Specific margins */
+    margin: 1rem 0 1rem 1rem;
     padding: 0.5rem 0.75rem;
 }
 
@@ -107,16 +111,21 @@ body {
     outline: none !important;
 }
 
-.toggle-btn:focus,
-.toggle-btn:active,
+.toggle-btn:focus:not(:hover),
+.toggle-btn:active:not(:hover) {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    border-color: #242038 !important;
+}
+
 .toggle-btn:focus-visible {
     box-shadow: none !important;
     outline: none !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
 }
 
 .sidebar-container.collapsed {
-    width: 70px;  /* Slightly wider to accommodate button */
+    width: 75px;  /* Slightly wider to accommodate button */
 }
 
 .sidebar-container.collapsed .toggle-btn {

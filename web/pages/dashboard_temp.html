@@ -12,8 +12,17 @@
     <title>Immersion App</title>
 
     <script>
+        var bridge;
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            bridge = channel.objects.bridge;
+        });
+
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        function showSRS() {
+            if (bridge) bridge.showSRS();
         }
     </script>
 </head>
@@ -31,7 +40,7 @@
                     <div class="h1 pt-3 m-3 text-left h1-font">Anki</div>
                     <div class="list-group sidebar-buttons">
                         <a href="#" class="btn btn-dark dashboard-buttons">Dashboard</a>
-                        <a href="#" class="btn btn-dark dashboard-buttons">SRS</a>
+                        <a href="#" class="btn btn-dark dashboard-buttons" onclick="showSRS()">SRS</a>
                         <a href="#" class="btn btn-dark dashboard-buttons">Immersion</a>
                         <a href="#" class="btn btn-dark dashboard-buttons">Settings</a>
                         <a href="#" class="btn btn-dark dashboard-buttons">About</a>
