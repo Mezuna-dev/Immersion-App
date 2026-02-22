@@ -1,9 +1,8 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget, \
+from PyQt6.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QProgressDialog, QMessageBox
 import sys
 import database
-from widgets.dashboard import DashboardWidget
-from widgets.review import ReviewWidget
+from widgets.app_widget import AppWidget
 from utils.import_thread import ImportThread
 
 
@@ -14,7 +13,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Immersion Suite")
         self.showMaximized()
-        
+
         self.setup_menu()
         self.setup_widgets()
 
@@ -32,31 +31,14 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
 
     def setup_widgets(self):
-        self.stacked_widget = QStackedWidget()
-        
-        self.dashboard_widget = DashboardWidget()
-        self.review_widget = ReviewWidget()
+        self.app_widget = AppWidget()
+        self.setCentralWidget(self.app_widget)
 
-        self.stacked_widget.addWidget(self.dashboard_widget)
-        self.stacked_widget.addWidget(self.review_widget)
-
-        self.setCentralWidget(self.stacked_widget)
-
-        # Connect signals
-        self.dashboard_widget.show_srs_signal.connect(self.show_srs_screen)
-        self.review_widget.go_to_dashboard_signal.connect(self.show_dashboard_screen)
-
-    def show_dashboard_screen(self):
-        self.stacked_widget.setCurrentIndex(0)
-
-    def show_srs_screen(self):
-        self.stacked_widget.setCurrentIndex(1)
-    
     def import_deck(self):
         apkg_path = QFileDialog.getOpenFileName(
             self, "Import Anki Deck", "", "Anki Decks (*.apkg)"
         )[0]
-        
+
         if not apkg_path:
             return
 
@@ -69,16 +51,16 @@ class MainWindow(QMainWindow):
         self.import_thread.finished.connect(self.import_finished)
         self.import_thread.error.connect(self.import_error)
         self.import_thread.start()
-    
+
     def import_finished(self):
         self.progress.close()
-        self.dashboard_widget.update_stats()
+        self.app_widget.refresh_stats()
         QMessageBox.information(self, "Import Complete", "Deck imported successfully!")
-    
+
     def import_error(self, error_message):
         self.progress.close()
         QMessageBox.critical(
-            self, "Import Error", 
+            self, "Import Error",
             f"An error occurred while importing the deck:\n{error_message}"
         )
 
