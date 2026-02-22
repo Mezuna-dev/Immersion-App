@@ -1,6 +1,6 @@
 import database
 import scheduler
-import ankiimport
+import anki_importer
 
 def main_menu():
     """Display main menu and handle user choices"""
@@ -181,7 +181,7 @@ def delete_card_menu():
     
 def import_anki_deck():
     apkg_path = input('Please provide path to apkg file: ').strip()
-    ankiimport.import_anki_deck(apkg_path)
+    anki_importer.import_anki_deck(apkg_path)
 
 if __name__ == "__main__":
     main_menu()

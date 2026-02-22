@@ -115,7 +115,7 @@ class DashboardWidget(QWidget):
         due_cards = database.get_due_cards()
         new_cards = database.get_new_cards(limit=20)
 
-        page_path = Path(__file__).parent.parent / "pages" / "test.html"
+        page_path = Path(__file__).parent.parent / "web" / "pages" / "test.html"
         with open(page_path, "r") as f:
             html = f.read()
 
@@ -124,7 +124,7 @@ class DashboardWidget(QWidget):
         html = html.replace("{{new_cards}}", str(len(new_cards)))
 
         # Save processed HTML temporarily
-        temp_path = Path(__file__).parent.parent / 'pages' / 'dashboard_temp.html'
+        temp_path = Path(__file__).parent.parent / 'web' / 'pages' / 'dashboard_temp.html'
         with open(temp_path, 'w') as f:
             f.write(html)
         
