@@ -4,6 +4,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
 from pathlib import Path
+import json
 import database
 
 
@@ -19,6 +20,22 @@ class AppBridge(QObject):
         self.web_view.page().runJavaScript(
             f'updateStats({len(due_cards)}, {len(new_cards)});'
         )
+        
+    @pyqtSlot()
+    def getDecks(self):
+        decks = database.get_all_decks()
+        deck_list = []
+        for deck in decks:
+            due_count = len(database.get_due_cards(deck_id=deck.id))
+            new_count = len(database.get_new_cards(deck_id=deck.id))
+            deck_list.append({
+                'id': deck.id,
+                'name': deck.name,
+                'due': due_count,
+                'new': new_count,
+            })
+        payload = json.dumps(deck_list)
+        self.web_view.page().runJavaScript(f'updateDecks({payload});')
 
 
 class AppWidget(QWidget):
