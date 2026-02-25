@@ -44,16 +44,18 @@
             var container = document.getElementById('deck-list');
             container.innerHTML = '';
             if (decks.length === 0) {
-                container.innerHTML = '<p class="text-muted">No decks found. Create or import a deck to get started.</p>';
+                container.innerHTML = '<p class="text">No decks found. Create or import a deck to get started.</p>';
                 return;
             }
             decks.forEach(function(deck) {
                 var card = document.createElement('div');
                 card.className = 'card text-white mb-3';
-                card.style.backgroundColor = '#2d2a3e';
+                card.style.backgroundColor = '#9067C6';
                 card.style.cursor = 'pointer';
+                card.style.marginRight = '300px';
+                card.style.animation = 'fadeIn 0.6s ease';
                 card.innerHTML =
-                    '<div class="card-body rounded d-flex justify-content-between align-items-center" style="background-color: #9067C6; margin-right: 300px;">' +
+                    '<div class="card-body rounded d-flex justify-content-between align-items-center" style="background-color: #9067C6;">' +
                         '<h5 class="card-title mb-0">' + deck.name + '</h5>' +
                         '<div class="d-flex gap-3">' +
                             '<span class="badge" style="background-color:#2d2a3e; font-size:0.9rem;">' + deck.due + ' due</span>' +
@@ -112,7 +114,11 @@
 
                 <!-- SRS View -->
                 <div id="srs-view" class="view-section view-hidden text-white">
+                    <row class="">
                     <h1 class="mb-4">Decks</h1>
+                    <a href="#" class="btn btn-dark" style="margin-left: 2rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Create Deck</a>
+                    <a href="#" class="btn btn-dark" style="margin-left: 1rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Import Deck</a>
+                    </row>
                     <div id="deck-list"></div>
                 </div>
 

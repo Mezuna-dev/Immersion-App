@@ -16,18 +16,18 @@ class AppBridge(QObject):
     @pyqtSlot()
     def refreshStats(self):
         due_cards = database.get_due_cards()
-        new_cards = database.get_new_cards(limit=20)
+        new_cards = database.get_new_cards()
         self.web_view.page().runJavaScript(
             f'updateStats({len(due_cards)}, {len(new_cards)});'
         )
-        
+
     @pyqtSlot()
     def getDecks(self):
         decks = database.get_all_decks()
         deck_list = []
         for deck in decks:
             due_count = len(database.get_due_cards(deck_id=deck.id))
-            new_count = len(database.get_new_cards(deck_id=deck.id))
+            new_count = len(database.get_new_cards(deck_id=deck.id, limit=20))
             deck_list.append({
                 'id': deck.id,
                 'name': deck.name,
@@ -36,6 +36,7 @@ class AppBridge(QObject):
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
+
 
 
 class AppWidget(QWidget):

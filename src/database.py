@@ -144,6 +144,30 @@ def get_deck_by_id(id):
         con.close()
         return deck
 
+def delete_deck(deck_id):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        DELETE FROM Deck
+        WHERE ID=?
+    """, (deck_id,))
+
+    con.commit()
+    con.close()
+
+def delete_deck_by_name(name):
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        DELETE FROM Deck
+        WHERE Name=?
+    """, (name,))
+
+    con.commit()
+    con.close()
+
 # --- Card Functions --------------------------------
 
 def create_card(deck_id: int, front: str, back: str):
