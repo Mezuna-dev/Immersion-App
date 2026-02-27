@@ -41,6 +41,12 @@ class AppBridge(QObject):
         main_window = self.web_view.window()
         if main_window:
             main_window.import_deck()
+    
+    @pyqtSlot()
+    def createDeck(self, deck_name):
+        if deck_name:
+            database.create_deck(deck_name)
+            self.refreshStats()
 
 class AppWidget(QWidget):
     def __init__(self):

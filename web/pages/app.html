@@ -73,6 +73,19 @@
                 container.appendChild(card);
             });
         }
+
+        function createDeck() {
+            var name = document.getElementById('deck-name').value.trim();
+            if (name === '') {
+                alert('Please enter a deck name.');
+                return;
+            }
+            if (bridge) {
+                bridge.createDeck(name);
+                document.getElementById('deck-name').value = '';
+                showView('srs');
+            }
+        }
     </script>
 </head>
 <body>
@@ -130,6 +143,18 @@
                     <div id="deck-list"></div>
                 </div>
 
+
+                <!-- Create Deck View -->
+                <div id="create-deck-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4">Create Deck</h1>
+                    <row class="mb-4">
+                        <div class="form-group">
+                            <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="deck-name">Deck Name</label>
+                            <input type="text" class="form-control" id="deck-name" placeholder="Enter deck name" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%;">
+                        </div>
+                    </row>
+                    <button class="btn btn-dark" onclick="createDeck()" style="width: 10rem; height: 3rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
+                </div>
             </div>
         </div>
     </div>
