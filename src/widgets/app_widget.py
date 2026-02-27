@@ -42,7 +42,7 @@ class AppBridge(QObject):
         if main_window:
             main_window.import_deck()
     
-    @pyqtSlot()
+    @pyqtSlot(str)
     def createDeck(self, deck_name):
         if deck_name:
             database.create_deck(deck_name)
