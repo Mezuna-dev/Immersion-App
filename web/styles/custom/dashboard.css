@@ -191,6 +191,16 @@ body {
     animation: fadeIn 0.4s ease;
 }
 
+.srs-buttons {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    text-align: left;
+    border: none !important;
+    border-radius: 8px;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+}
+
 /* Animate each sidebar button with staggered delays */
 .dashboard-buttons:nth-child(1) { animation: fadeIn 0.5s ease; animation-delay: 0.1s; opacity: 0; animation-fill-mode: forwards; }
 .dashboard-buttons:nth-child(2) { animation: fadeIn 0.5s ease; animation-delay: 0.2s; opacity: 0; animation-fill-mode: forwards; }

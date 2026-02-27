@@ -54,12 +54,14 @@ class MainWindow(QMainWindow):
 
     def import_finished(self):
         self.progress.close()
-        self.app_widget.refresh_stats()
+       
         QMessageBox.information(self, "Import Complete", "Deck imported successfully!")
 
         decks = database.get_all_decks()
         if any(deck.name == "Default" for deck in decks):
             database.delete_deck_by_name("Default")
+            
+        self.app_widget.refresh_stats()
 
     def import_error(self, error_message):
         self.progress.close()

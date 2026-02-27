@@ -45,7 +45,8 @@ def initialize_database():
             CREATE TABLE Deck (
                 ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL,
-                Date_Created TEXT NOT NULL
+                Date_Created TEXT NOT NULL,
+                New_Cards_Limit INTEGER NOT NULL DEFAULT 15
                 )
         """)
 
@@ -114,11 +115,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit FROM Deck""")
     rows = cur.fetchall()
     
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2])
+        deck = models.Deck(row[0], row[1], row[2], row[3])
         decks.append(deck)
 
     con.close()
@@ -129,7 +130,7 @@ def get_deck_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Name, Date_Created FROM Deck
+        SELECT ID, Name, Date_Created, New_Cards_Limit FROM Deck
         WHERE ID=?
     """, (id,))
 
@@ -139,7 +140,7 @@ def get_deck_by_id(id):
         con.close()
         return None
     else:
-        deck = models.Deck(row[0], row[1], row[2])
+        deck = models.Deck(row[0], row[1], row[2], row[3])
         
         con.close()
         return deck

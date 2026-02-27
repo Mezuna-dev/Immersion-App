@@ -16,10 +16,9 @@ class AppBridge(QObject):
     @pyqtSlot()
     def refreshStats(self):
         due_cards = database.get_due_cards()
-        new_cards = database.get_new_cards()
-        self.web_view.page().runJavaScript(
-            f'updateStats({len(due_cards)}, {len(new_cards)});'
-        )
+        decks = database.get_all_decks()
+        total_new = sum(len(database.get_new_cards(deck_id=deck.id, limit=deck.new_cards_limit)) for deck in decks)
+        self.web_view.page().runJavaScript(f'updateStats({len(due_cards)}, {total_new});')
 
     @pyqtSlot()
     def getDecks(self):
@@ -27,7 +26,7 @@ class AppBridge(QObject):
         deck_list = []
         for deck in decks:
             due_count = len(database.get_due_cards(deck_id=deck.id))
-            new_count = len(database.get_new_cards(deck_id=deck.id, limit=20))
+            new_count = len(database.get_new_cards(deck_id=deck.id, limit=deck.new_cards_limit))
             deck_list.append({
                 'id': deck.id,
                 'name': deck.name,
@@ -36,8 +35,12 @@ class AppBridge(QObject):
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
-
-
+    
+    @pyqtSlot()
+    def importDeck(self):
+        main_window = self.web_view.window()
+        if main_window:
+            main_window.import_deck()
 
 class AppWidget(QWidget):
     def __init__(self):
@@ -64,4 +67,5 @@ class AppWidget(QWidget):
         self.setStyleSheet("background-color: #242038;")
 
     def refresh_stats(self):
+        self.bridge.getDecks()
         self.bridge.refreshStats()
