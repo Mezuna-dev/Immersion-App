@@ -27,11 +27,14 @@ class AppBridge(QObject):
         for deck in decks:
             due_count = len(database.get_due_cards(deck_id=deck.id))
             new_count = len(database.get_new_cards(deck_id=deck.id, limit=deck.new_cards_limit))
+            total_count = database.get_cards_by_deck(deck_id=deck.id)
             deck_list.append({
                 'id': deck.id,
                 'name': deck.name,
                 'due': due_count,
                 'new': new_count,
+                'total': len(total_count),
+                'description': deck.description
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
@@ -42,10 +45,16 @@ class AppBridge(QObject):
         if main_window:
             main_window.import_deck()
     
-    @pyqtSlot(str)
-    def createDeck(self, deck_name):
+    @pyqtSlot(str, str)
+    def createDeck(self, deck_name, deck_description):
         if deck_name:
-            database.create_deck(deck_name)
+            database.create_deck(deck_name, deck_description)
+            self.refreshStats()
+    
+    @pyqtSlot(int, str, str)
+    def createCard(self, deck_id, front, back):
+        if front and back:
+            database.create_card(deck_id, front, back)
             self.refreshStats()
 
 class AppWidget(QWidget):

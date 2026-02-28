@@ -46,7 +46,8 @@ def initialize_database():
                 ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL,
                 Date_Created TEXT NOT NULL,
-                New_Cards_Limit INTEGER NOT NULL DEFAULT 15
+                New_Cards_Limit INTEGER NOT NULL DEFAULT 15,
+                Description TEXT
                 )
         """)
 
@@ -92,15 +93,15 @@ def initialize_database():
 
 # --- Deck Functions --------------------------------
 
-def create_deck(name: str):
+def create_deck(name: str, description: str = ""):
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     cur.execute("""
-        INSERT INTO Deck (Name, Date_Created)
-        VALUES (?, ?)
-    """, (name, creation_date))
+        INSERT INTO Deck (Name, Date_Created, Description)
+        VALUES (?, ?, ?)
+    """, (name, creation_date, description))
 
     con.commit()
     new_deck_id = cur.lastrowid
@@ -115,11 +116,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description FROM Deck""")
     rows = cur.fetchall()
     
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2], row[3])
+        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4])
         decks.append(deck)
 
     con.close()

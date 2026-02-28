@@ -61,7 +61,7 @@
                 card.style.marginRight = '300px';
                 card.style.animation = 'fadeIn 0.6s ease';
                 card.innerHTML =
-                    '<a href="#" class="card-link" onclick="showView(\'deck\')" style="text-decoration: none;">' +
+                    '<a href="#" class="card-link" style="text-decoration: none;">' +
                         '<div class="card-body rounded d-flex justify-content-between align-items-center" style="background-color: #9067C6;">' +
                             '<h5 class="card-title mb-0" style="color: white;">' + deck.name + '</h5>' +
                             '<div class="d-flex gap-3">' +
@@ -70,20 +70,65 @@
                             '</div>' +
                         '</div>'
                     '</a>';
+
+                card.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showDeckDetails(deck);
+                });
                 container.appendChild(card);
             });
         }
 
         function createDeck() {
             var name = document.getElementById('deck-name').value.trim();
+            var description = document.getElementById('deck-description').value.trim();
             if (name === '') {
                 alert('Please enter a deck name.');
                 return;
             }
             if (bridge) {
-                bridge.createDeck(name);
+                bridge.createDeck(name, description);
                 document.getElementById('deck-name').value = '';
+                document.getElementById('deck-description').value = '';
                 showView('srs');
+            }
+        }
+
+        function showDeckDetails(deck) {
+            var deckDetailsView = document.getElementById('deck-details-view');
+            deckDetailsView.innerHTML = `
+                <input type="hidden" id="current-deck-id" value="${deck.id}">
+                <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">${deck.name}</h1>
+                <p style="animation: fadeIn 0.6s ease;">Total Cards: ${deck.total}</p>
+                <p style="animation: fadeIn 0.6s ease;">Due Cards: ${deck.due}</p>
+                <p style="animation: fadeIn 0.6s ease;">New Cards: ${deck.new}</p>
+                <div class="card mb-4" style="background-color: #9067C6; width: 50%;">
+                    <div class="card-body text-white">
+                        <h5 class="card-title">Description</h5>
+                        <p class="card-text">${deck.description || 'No description provided.'}</p>
+                    </div>
+                </div>
+                <button class="btn btn-dark" style="margin-top: 1rem; background-color: #9067C6;">Start Review</button>
+                <button class="btn btn-dark" onclick="showView('create-card')" style="margin-top: 1rem; background-color: #9067C6;">Add New Card</button>
+                <button class="btn btn-dark" onclick="showView('srs')" style="margin-top: 1rem; background-color: #9067C6;">Back to Decks</button>
+            `;
+            showView('deck-details')
+            ;
+        }
+
+        function createCard() {
+            var front = document.getElementById('card-front').value.trim();
+            var back = document.getElementById('card-back').value.trim();
+            var currentDeckId = document.getElementById('current-deck-id').value;
+            if (front === '' || back === '') {
+                alert('Please fill in both card front and back.');
+                return;
+            }
+            if (bridge) {
+                bridge.createCard(currentDeckId, front, back);
+                document.getElementById('card-front').value = '';
+                document.getElementById('card-back').value = '';
+                showView('deck-details');
             }
         }
     </script>
@@ -151,12 +196,34 @@
                         <div class="form-group">
                             <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="deck-name">Deck Name</label>
                             <input type="text" class="form-control" id="deck-name" placeholder="Enter deck name" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%;">
+                            <label class="form-label h2" style="margin-top: 1rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="deck-description">Deck Description</label>
+                            <textarea class="form-control" id="deck-description" placeholder="Enter deck description (optional)" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%; height: 150px;"></textarea>
                         </div>
                     </row>
                     <button class="btn btn-dark" onclick="createDeck()" style="width: 10rem; height: 3rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
                     <button class="btn btn-dark" onclick="showView('srs')" style="width: 10rem; height: 3rem; margin-left: 1rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                </div>
+
+                <!-- Deck Details View -->
+                <div id="deck-details-view" class="view-section view-hidden text-white">
 
                 </div>
+
+                <!-- Create Card View -->
+                <div id="create-card-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4">Create New Card</h1>
+                    <row class="mb-4">
+                        <div class="form-group">
+                            <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-front">Card Front</label>
+                            <textarea class="form-control" id="card-front" placeholder="Enter card front content" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%; height: 150px;"></textarea>
+                            <label class="form-label h2" style="margin-top: 1rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-back">Card Back</label>
+                            <textarea class="form-control" id="card-back" placeholder="Enter card back content" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%; height: 150px;"></textarea>
+                        </div>
+                    </row>
+                    <button class="btn btn-dark" onclick="createCard()" style="width: 10rem; height: 3rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
+                    <button class="btn btn-dark" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; margin-left: 1rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                </div>
+
             </div>
         </div>
     </div>

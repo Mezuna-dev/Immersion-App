@@ -1,13 +1,13 @@
 
 class Deck:
-    def __init__(self, id, name, date_created, new_cards_limit) -> None:
+    def __init__(self, id, name, date_created, new_cards_limit, description=None) -> None:
         self.id = id
         self.name = name
         self.date_created = date_created
         self.new_cards_limit = new_cards_limit
-
+        self.description = description
     def __repr__(self) -> str:
-        return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\n"
+        return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\n"
     
 class Card:
     def __init__(self, id, deck_id, card_front, card_back, reps,
