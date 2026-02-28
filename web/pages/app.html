@@ -13,6 +13,10 @@
 
     <script>
         var bridge;
+        var cardTypes = [];
+        var decks = [];
+        var fieldCounter = 0;
+        var createCardPreselectedDeckId = null;
         new QWebChannel(qt.webChannelTransport, function(channel) {
             bridge = channel.objects.bridge;
             bridge.refreshStats();
@@ -33,11 +37,15 @@
                 el.classList.add('view-hidden');
             });
             document.getElementById(viewId + '-view').classList.remove('view-hidden');
-            if (viewId === 'dashboard' && bridge) {
-                bridge.refreshStats();
-            }
-            if (viewId === 'srs' && bridge) {
-                bridge.getDecks();
+            if (viewId === 'dashboard' && bridge) bridge.refreshStats();
+            if (viewId === 'srs' && bridge) bridge.getDecks();
+            if (viewId === 'card-types' && bridge) bridge.getCardTypes();
+            if (viewId === 'create-card-type') initCreateCardTypeView();
+            if (viewId === 'create-card' && bridge) {
+                if (cardTypes.length === 0) bridge.getCardTypes();
+                else updateCardTypes(cardTypes);
+                if (decks.length === 0) bridge.getDecks();
+                else populateCardDeckSelect();
             }
         }
 
@@ -46,7 +54,25 @@
             document.getElementById('new-cards').textContent = newCards;
         }
 
-        function updateDecks(decks) {
+        function populateCardDeckSelect() {
+            var select = document.getElementById('card-deck-select');
+            if (!select) return;
+            var preselect = createCardPreselectedDeckId !== null ? String(createCardPreselectedDeckId) : select.value;
+            select.innerHTML = '';
+            decks.forEach(function(deck) {
+                var opt = document.createElement('option');
+                opt.value = deck.id;
+                opt.textContent = deck.name;
+                select.appendChild(opt);
+            });
+            if (preselect && decks.some(function(d) { return String(d.id) === preselect; })) {
+                select.value = preselect;
+            }
+        }
+
+        function updateDecks(deckData) {
+            decks = deckData;
+            populateCardDeckSelect();
             var container = document.getElementById('deck-list');
             container.innerHTML = '';
             if (decks.length === 0) {
@@ -79,11 +105,16 @@
             });
         }
 
+        function showCreateCard(deckId) {
+            createCardPreselectedDeckId = (deckId !== undefined) ? deckId : null;
+            showView('create-card');
+        }
+
         function createDeck() {
             var name = document.getElementById('deck-name').value.trim();
             var description = document.getElementById('deck-description').value.trim();
             if (name === '') {
-                alert('Please enter a deck name.');
+                showAlert('Please enter a deck name.');
                 return;
             }
             if (bridge) {
@@ -95,10 +126,12 @@
         }
 
         function showDeckDetails(deck) {
+            currentDeckForDetails = deck;
             var deckDetailsView = document.getElementById('deck-details-view');
             deckDetailsView.innerHTML = `
                 <input type="hidden" id="current-deck-id" value="${deck.id}">
                 <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">${deck.name}</h1>
+                <a href="#" class="btn btn-dark" onclick="showDeckSettings()" style="margin-left: 2rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Settings</a>
                 <p style="animation: fadeIn 0.6s ease;">Total Cards: ${deck.total}</p>
                 <p style="animation: fadeIn 0.6s ease;">Due Cards: ${deck.due}</p>
                 <p style="animation: fadeIn 0.6s ease;">New Cards: ${deck.new}</p>
@@ -108,27 +141,284 @@
                         <p class="card-text">${deck.description || 'No description provided.'}</p>
                     </div>
                 </div>
-                <button class="btn btn-dark" style="margin-top: 1rem; background-color: #9067C6;">Start Review</button>
-                <button class="btn btn-dark" onclick="showView('create-card')" style="margin-top: 1rem; background-color: #9067C6;">Add New Card</button>
+                <button class="btn btn-dark" onclick="startReview(${deck.id})" style="margin-top: 1rem; background-color: #9067C6;">Start Review</button>
+                <button class="btn btn-dark" onclick="showCreateCard(${deck.id})" style="margin-top: 1rem; background-color: #9067C6;">Add New Card</button>
                 <button class="btn btn-dark" onclick="showView('srs')" style="margin-top: 1rem; background-color: #9067C6;">Back to Decks</button>
             `;
             showView('deck-details')
             ;
         }
 
-        function createCard() {
-            var front = document.getElementById('card-front').value.trim();
-            var back = document.getElementById('card-back').value.trim();
-            var currentDeckId = document.getElementById('current-deck-id').value;
-            if (front === '' || back === '') {
-                alert('Please fill in both card front and back.');
+        var currentDeckForDetails = null;
+
+        function showDeckSettings() {
+            var deck = currentDeckForDetails;
+            if (!deck) return;
+            document.getElementById('settings-deck-name').textContent = deck.name;
+            document.getElementById('settings-new-cards-limit').value = deck.new_cards_limit !== undefined ? deck.new_cards_limit : 15;
+            showView('deck-settings');
+        }
+
+        function saveDeckSettings() {
+            if (!currentDeckForDetails || !bridge) return;
+            var limit = parseInt(document.getElementById('settings-new-cards-limit').value, 10);
+            if (isNaN(limit) || limit < 0) { showAlert('Please enter a valid number.'); return; }
+            bridge.saveDeckSettings(currentDeckForDetails.id, limit);
+            showView('deck-details');
+        }
+
+        var reviewQueue = [];
+        var currentCardIndex = 0;
+        var currentCard = null;
+        var currentDeckIdForReview = null;
+
+        function startReview(deckId) {
+            currentDeckIdForReview = deckId;
+            if (bridge) {
+                bridge.startReview(deckId);
+            }
+        }
+
+        function updateReviewQueue(cards) {
+            reviewQueue = cards;
+            currentCardIndex = 0;
+            document.getElementById('review-card-section').style.display = 'block';
+            document.getElementById('review-complete-section').style.display = 'none';
+            showView('review');
+            if (reviewQueue.length === 0) {
+                showReviewComplete();
                 return;
             }
+            showNextCard();
+        }
+
+        function showNextCard() {
+            if (currentCardIndex >= reviewQueue.length) {
+                showReviewComplete();
+                return;
+            }
+            currentCard = reviewQueue[currentCardIndex];
+            document.getElementById('review-progress').textContent =
+                (currentCardIndex + 1) + ' / ' + reviewQueue.length;
+            document.getElementById('review-front-text').textContent = currentCard.front;
+            document.getElementById('review-back-container').style.display = 'none';
+            document.getElementById('review-rating-buttons').style.display = 'none';
+            document.getElementById('review-show-answer-btn').style.display = 'block';
+        }
+
+        function revealAnswer() {
+            document.getElementById('review-back-text').textContent = currentCard.back;
+            document.getElementById('review-back-container').style.display = 'block';
+            document.getElementById('review-rating-buttons').style.display = 'flex';
+            document.getElementById('review-show-answer-btn').style.display = 'none';
+        }
+
+        function rateCard(rating) {
+            if (bridge && currentCard) {
+                bridge.submitRating(currentCard.id, rating);
+                currentCardIndex++;
+                showNextCard();
+            }
+        }
+
+        function showReviewComplete() {
+            document.getElementById('review-card-section').style.display = 'none';
+            document.getElementById('review-complete-section').style.display = 'block';
+        }
+
+        function updateCardTypes(types) {
+            cardTypes = types;
+            var list = document.getElementById('card-type-list');
+            if (list) {
+                list.innerHTML = '';
+                if (types.length === 0) {
+                    list.innerHTML = '<p>No card types found.</p>';
+                } else {
+                    types.forEach(function(ct) {
+                        var div = document.createElement('div');
+                        div.className = 'card text-white mb-3';
+                        div.style.cssText = 'background-color:#9067C6;width:50%;animation:fadeIn 0.6s ease;';
+                        var actionButtons = ct.is_default ? '' :
+                            '<div class="mt-2 d-flex gap-2">' +
+                            '<button class="btn btn-dark btn-sm" onclick="showEditCardTypeById(' + ct.id + ')" style="background-color:#2d2a3e;">Edit</button>' +
+                            '<button class="btn btn-dark btn-sm" onclick="confirmDeleteCardType(' + ct.id + ')" style="background-color:#c0392b;">Delete</button>' +
+                            '</div>';
+                        div.innerHTML = '<div class="card-body"><h5 class="card-title mb-1">' + ct.name +
+                            (ct.is_default ? ' <span class="badge" style="background-color:#2d2a3e;font-size:0.75rem;">Default</span>' : '') +
+                            '</h5><p class="mb-1" style="font-size:0.9rem;">Fields: ' + ct.fields.join(', ') + '</p>' +
+                            actionButtons + '</div>';
+                        list.appendChild(div);
+                    });
+                }
+            }
+            var select = document.getElementById('card-type-select');
+            if (select) {
+                var prev = select.value;
+                select.innerHTML = '';
+                types.forEach(function(ct) {
+                    var opt = document.createElement('option');
+                    opt.value = ct.id;
+                    opt.textContent = ct.name;
+                    select.appendChild(opt);
+                });
+                if (prev && types.some(function(ct) { return String(ct.id) === prev; })) select.value = prev;
+                renderCardFields(select.value);
+            }
+        }
+
+        function renderCardFields(typeId) {
+            var container = document.getElementById('card-fields-container');
+            if (!container) return;
+            container.innerHTML = '';
+            var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
+            if (!ct) return;
+            ct.fields.forEach(function(fieldName) {
+                var wrapper = document.createElement('div');
+                wrapper.className = 'mb-3';
+                wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + fieldName + '</label>' +
+                    '<textarea class="form-control card-field-input" data-field="' + fieldName +
+                    '" placeholder="Enter ' + fieldName +
+                    '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>';
+                container.appendChild(wrapper);
+            });
+        }
+
+        function addCardTypeField(defaultValue) {
+            fieldCounter++;
+            var id = 'ct-field-' + fieldCounter;
+            var row = document.createElement('div');
+            row.className = 'd-flex align-items-center mb-2';
+            row.id = 'row-' + id;
+            row.innerHTML = '<input type="text" class="form-control card-type-field-input" id="' + id +
+                '" placeholder="Field name" value="' + (defaultValue || '') +
+                '" style="color:black;border:none;font-size:130%;background-color:white;">' +
+                '<button class="btn btn-dark ms-2" onclick="removeCardTypeField(\'row-' + id +
+                '\')" style="background-color:#c0392b;min-width:2.5rem;">✕</button>';
+            document.getElementById('card-type-fields-list').appendChild(row);
+        }
+
+        function removeCardTypeField(rowId) {
+            var row = document.getElementById(rowId);
+            if (row) row.remove();
+        }
+
+        function initCreateCardTypeView() {
+            document.getElementById('card-type-name').value = '';
+            document.getElementById('card-type-fields-list').innerHTML = '';
+            fieldCounter = 0;
+            addCardTypeField('');
+            addCardTypeField('');
+        }
+
+        function submitCreateCardType() {
+            var name = document.getElementById('card-type-name').value.trim();
+            if (!name) { showAlert('Please enter a card type name.'); return; }
+            var inputs = document.querySelectorAll('.card-type-field-input');
+            var fields = Array.from(inputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
+            if (fields.length === 0) { showAlert('Please add at least one field.'); return; }
+            if (bridge) { bridge.createCardType(name, JSON.stringify(fields)); showView('card-types'); }
+        }
+
+        var currentEditingCardType = null;
+
+        function showEditCardTypeById(id) {
+            var ct = cardTypes.find(function(t) { return t.id === id; });
+            if (!ct) return;
+            currentEditingCardType = ct;
+            document.getElementById('edit-card-type-name').value = ct.name;
+            document.getElementById('edit-card-type-fields-list').innerHTML = '';
+            fieldCounter = 0;
+            ct.fields.forEach(function(f) { addEditCardTypeField(f); });
+            showView('edit-card-type');
+        }
+
+        function addEditCardTypeField(defaultValue) {
+            fieldCounter++;
+            var id = 'edit-ct-field-' + fieldCounter;
+            var row = document.createElement('div');
+            row.className = 'd-flex align-items-center mb-2';
+            row.id = 'edit-row-' + id;
+            row.innerHTML = '<input type="text" class="form-control edit-card-type-field-input" id="' + id +
+                '" placeholder="Field name" value="' + (defaultValue || '') +
+                '" style="color:black;border:none;font-size:130%;background-color:white;">' +
+                '<button class="btn btn-dark ms-2" onclick="removeEditCardTypeField(\'edit-row-' + id +
+                '\')" style="background-color:#c0392b;min-width:2.5rem;">✕</button>';
+            document.getElementById('edit-card-type-fields-list').appendChild(row);
+        }
+
+        function removeEditCardTypeField(rowId) {
+            var row = document.getElementById(rowId);
+            if (row) row.remove();
+        }
+
+        function submitEditCardType() {
+            if (!currentEditingCardType) return;
+            var name = document.getElementById('edit-card-type-name').value.trim();
+            if (!name) { showAlert('Please enter a card type name.'); return; }
+            var inputs = document.querySelectorAll('.edit-card-type-field-input');
+            var fields = Array.from(inputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
+            if (fields.length === 0) { showAlert('Please add at least one field.'); return; }
+            if (bridge) { bridge.updateCardType(currentEditingCardType.id, name, JSON.stringify(fields)); showView('card-types'); }
+        }
+
+        function blurActiveElement(modalEl) {
+            modalEl.addEventListener('hide.bs.modal', function() {
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+            }, { once: true });
+        }
+
+        function showAlert(message) {
+            var modalEl = document.getElementById('alert-modal');
+            document.getElementById('alert-modal-message').textContent = message;
+            blurActiveElement(modalEl);
+            var modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+
+        var confirmModalCallback = null;
+
+        function showConfirm(message, callback) {
+            var modalEl = document.getElementById('confirm-modal');
+            confirmModalCallback = callback;
+            document.getElementById('confirm-modal-message').textContent = message;
+            blurActiveElement(modalEl);
+            var modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+
+        function confirmModalAction() {
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+            var modal = bootstrap.Modal.getInstance(document.getElementById('confirm-modal'));
+            if (modal) modal.hide();
+            if (confirmModalCallback) {
+                confirmModalCallback();
+                confirmModalCallback = null;
+            }
+        }
+
+        function confirmDeleteCardType(id) {
+            showConfirm('Delete this card type? Cards using it will keep their existing data.', function() {
+                if (bridge) bridge.deleteCardType(id);
+            });
+        }
+
+        function createCard() {
+            var deckSelect = document.getElementById('card-deck-select');
+            var currentDeckId = parseInt(deckSelect.value, 10);
+            var typeSelect = document.getElementById('card-type-select');
+            var cardTypeId = parseInt(typeSelect.value, 10);
+            if (!currentDeckId) { showAlert('Please select a deck.'); return; }
+            var fieldsObj = {};
+            var hasContent = false;
+            document.querySelectorAll('.card-field-input').forEach(function(ta) {
+                fieldsObj[ta.getAttribute('data-field')] = ta.value.trim();
+                if (ta.value.trim()) hasContent = true;
+            });
+            if (!hasContent) { showAlert('Please fill in at least one field.'); return; }
             if (bridge) {
-                bridge.createCard(currentDeckId, front, back);
-                document.getElementById('card-front').value = '';
-                document.getElementById('card-back').value = '';
-                showView('deck-details');
+                bridge.createCard(currentDeckId, cardTypeId, JSON.stringify(fieldsObj));
+                document.querySelectorAll('.card-field-input').forEach(function(ta) { ta.value = ''; });
+                showView('srs');
             }
         }
     </script>
@@ -136,7 +426,7 @@
 <body>
     <div class="container-fluid p-4 bg-dashboard">
         <div class="row">
-            <div class="col-md-2 sidebar-color text-white rounded shadow sidebar-container" id="sidebar" style="height: calc(100vh - 2rem);">
+            <div class="col-md-2 sidebar-color text-white rounded shadow sidebar-container" id="sidebar" style="height: calc(100vh - 3rem);">
                 <button class="btn btn-dark toggle-btn" onclick="toggleSidebar()">
                     ☰
                 </button>
@@ -153,7 +443,7 @@
                 </div>
             </div>
 
-            <div class="col bg-main p-5" style="height: calc(100vh - 2rem); overflow-y: hidden;">
+            <div class="col bg-main p-5" style="height: calc(100vh - 3rem); overflow-y: auto;">
 
                 <!-- Dashboard View -->
                 <div id="dashboard-view" class="view-section text-white">
@@ -184,6 +474,8 @@
                     <h1 class="mb-4">Decks</h1>
                     <a href="#" class="btn btn-dark" onclick="showView('create-deck')" style="margin-left: 2rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Create Deck</a>
                     <a href="#" class="btn btn-dark" onclick="importDeck()" style="margin-left: 1rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Import Deck</a>
+                    <a href="#" class="btn btn-dark" onclick="showCreateCard()" style="margin-left: 1rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Create Card</a>
+                    <a href="#" class="btn btn-dark" onclick="showView('card-types')" style="margin-left: 1rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Card Types</a>
                     </row>
                     <div id="deck-list"></div>
                 </div>
@@ -209,21 +501,148 @@
 
                 </div>
 
-                <!-- Create Card View -->
-                <div id="create-card-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4">Create New Card</h1>
-                    <row class="mb-4">
-                        <div class="form-group">
-                            <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-front">Card Front</label>
-                            <textarea class="form-control" id="card-front" placeholder="Enter card front content" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%; height: 150px;"></textarea>
-                            <label class="form-label h2" style="margin-top: 1rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-back">Card Back</label>
-                            <textarea class="form-control" id="card-back" placeholder="Enter card back content" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%; height: 150px;"></textarea>
+                <!-- Deck Settings View -->
+                <div id="deck-settings-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;"><span id="settings-deck-name"></span> — Settings</h1>
+                    <div class="card mb-4" style="background-color: #9067C6; width: 50%; animation: fadeIn 0.6s ease;">
+                        <div class="card-body text-white">
+                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">New Cards</h2></div>
+                            <label class="form-label" for="settings-new-cards-limit" style="font-size: 1rem;">New cards per day</label>
+                            <input type="number" class="form-control" id="settings-new-cards-limit" min="0"
+                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 8rem;">
                         </div>
-                    </row>
-                    <button class="btn btn-dark" onclick="createCard()" style="width: 10rem; height: 3rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
-                    <button class="btn btn-dark" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; margin-left: 1rem; margin-top: 1.5rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-dark" onclick="saveDeckSettings()" style="width: 10rem; height: 3rem; background-color: #9067C6; font-size: large; font-weight: 600;">Save</button>
+                        <button class="btn btn-dark" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; margin-left: 1rem; background-color: #9067C6; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
                 </div>
 
+                <!-- Card Types View -->
+                <div id="card-types-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Card Types</h1>
+                    <a href="#" class="btn btn-dark" onclick="showView('create-card-type')" style="background-color: #9067C6; animation: fadeIn 0.6s ease; margin-left: 2rem; margin-top: .5rem;">Create Card Type</a>
+                    <div id="card-type-list" class="mt-4"></div>
+                </div>
+
+                <!-- Create Card Type View -->
+                <div id="create-card-type-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Create Card Type</h1>
+                    <div class="form-group" style="width: 50%;">
+                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-type-name">Type Name</label>
+                        <input type="text" class="form-control" id="card-type-name" placeholder="e.g. Japanese"
+                               style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease;">
+                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;">Fields</label>
+                        <div id="card-type-fields-list"></div>
+                        <button class="btn btn-dark mt-2" onclick="addCardTypeField()" style="background-color: #9067C6; animation: fadeIn 0.6s ease;">+ Add Field</button>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-dark" onclick="submitCreateCardType()" style="width: 10rem; height: 3rem; background-color: #9067C6; font-size: large; font-weight: 600;">Confirm</button>
+                        <button class="btn btn-dark" onclick="showView('card-types')" style="width: 10rem; height: 3rem; margin-left: 1rem; background-color: #9067C6; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Edit Card Type View -->
+                <div id="edit-card-type-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Edit Card Type</h1>
+                    <div class="form-group" style="width: 50%;">
+                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="edit-card-type-name">Type Name</label>
+                        <input type="text" class="form-control" id="edit-card-type-name" placeholder="e.g. Japanese"
+                               style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease;">
+                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;">Fields</label>
+                        <div id="edit-card-type-fields-list"></div>
+                        <button class="btn btn-dark mt-2" onclick="addEditCardTypeField()" style="background-color: #9067C6; animation: fadeIn 0.6s ease;">+ Add Field</button>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-dark" onclick="submitEditCardType()" style="width: 10rem; height: 3rem; background-color: #9067C6; font-size: large; font-weight: 600;">Save</button>
+                        <button class="btn btn-dark" onclick="showView('card-types')" style="width: 10rem; height: 3rem; margin-left: 1rem; background-color: #9067C6; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Create Card View -->
+                <div id="create-card-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Create New Card</h1>
+                    <div class="form-group" style="width: 50%;">
+                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-deck-select">Deck</label>
+                        <select class="form-control" id="card-deck-select"
+                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
+                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-type-select">Card Type</label>
+                        <select class="form-control" id="card-type-select" onchange="renderCardFields(this.value)"
+                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
+                        <div id="card-fields-container" class="mt-3"></div>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-dark" onclick="createCard()" style="width: 10rem; height: 3rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
+                        <button class="btn btn-dark" onclick="showView('srs')" style="width: 10rem; height: 3rem; margin-left: 1rem; background-color: #9067C6; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Review View -->
+                <div id="review-view" class="view-section view-hidden text-white">
+                    <!-- Card Section -->
+                    <div id="review-card-section" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h1 style="animation: fadeIn 0.6s ease;">Review</h1>
+                            <span id="review-progress" style="font-size: 1.2rem; animation: fadeIn 0.6s ease;"></span>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                            <div class="card-body d-flex flex-column justify-content-center align-items-center" style="min-height: 200px;">
+                                <p id="review-front-text" style="font-size: 1.5rem; color: white; text-align: center;"></p>
+                            </div>
+                            <div id="review-back-container" style="display: none; width: 100%; text-align: center;">
+                                <hr style="border-color: #9067C6; width: 70%; margin: 2rem auto;">
+                                <div class="card-body d-flex flex-column justify-content-center align-items-center" style="min-height: 150px;">
+                                    <p id="review-back-text" style="font-size: 1.5rem; color: white; text-align: center;"></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: center; padding-bottom: 2rem; margin-top: 10rem;">
+                            <button id="review-show-answer-btn" class="btn btn-dark" onclick="revealAnswer()" style="background-color: #9067C6; width: 12rem; height: 3rem; font-size: large; font-weight: 600; animation: fadeIn 0.6s ease;">Show Answer</button>
+                            <div id="review-rating-buttons" style="display: none; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                                <button class="btn btn-dark" onclick="rateCard(1)" style="background-color: #c0392b; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Again</button>
+                                <button class="btn btn-dark" onclick="rateCard(3)" style="background-color: #e67e22; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Hard</button>
+                                <button class="btn btn-dark" onclick="rateCard(4)" style="background-color: #27ae60; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Good</button>
+                                <button class="btn btn-dark" onclick="rateCard(5)" style="background-color: #2980b9; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Easy</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Complete Section -->
+                    <div id="review-complete-section" style="display: none;">
+                        <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Review Complete!</h1>
+                        <p style="animation: fadeIn 0.6s ease;">Great job! You've reviewed all your cards for today.</p>
+                        <button class="btn btn-dark" onclick="showView('srs')" style="margin-top: 1rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Back to Decks</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div class="modal fade" id="alert-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0" style="background-color: #2d2a3e; color: white;">
+                <div class="modal-body p-4">
+                    <p id="alert-modal-message" style="font-size: 1.1rem; margin-bottom: 0;"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-4 px-4">
+                    <button class="btn btn-dark" data-bs-dismiss="modal" style="background-color: #9067C6; width: 9rem; height: 2.75rem; font-weight: 600;">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirm-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0" style="background-color: #2d2a3e; color: white;">
+                <div class="modal-body p-4">
+                    <p id="confirm-modal-message" style="font-size: 1.1rem; margin-bottom: 0;"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-4 px-4 gap-2">
+                    <button class="btn btn-dark" onclick="confirmModalAction()" style="background-color: #9067C6; width: 9rem; height: 2.75rem; font-weight: 600;">Confirm</button>
+                    <button class="btn btn-dark" data-bs-dismiss="modal" style="background-color: #242038; width: 9rem; height: 2.75rem; font-weight: 600;">Cancel</button>
+                </div>
             </div>
         </div>
     </div>

@@ -83,7 +83,7 @@ body {
     padding: 1rem;  /* Add padding here instead of margins */
 }
 
-.row {
+.container-fluid > .row {
     min-height: calc(100vh - 2rem);  /* Account for container padding */
     max-height: calc(100vh - 2rem);
 }

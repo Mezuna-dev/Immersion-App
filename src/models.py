@@ -9,6 +9,17 @@ class Deck:
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\n"
     
+class CardType:
+    def __init__(self, id, name, fields, date_created, is_default=False) -> None:
+        self.id = id
+        self.name = name
+        self.fields = fields  # list of str, already parsed from JSON
+        self.date_created = date_created
+        self.is_default = bool(is_default)
+
+    def __repr__(self) -> str:
+        return f"\nId: {self.id}\nName: {self.name}\nFields: {self.fields}\nDate Created: {self.date_created}\nIs Default: {self.is_default}\n"
+
 class Card:
     def __init__(self, id, deck_id, card_front, card_back, reps,
             ease_factor, interval, due_date, is_new, date_created, last_reviewed) -> None:

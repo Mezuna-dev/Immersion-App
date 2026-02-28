@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import date
 import sqlite3
+import json
 import models
 
 # ===========================================================
@@ -51,6 +52,17 @@ def initialize_database():
                 )
         """)
 
+        # CardType Table
+        cur.execute("""
+            CREATE TABLE CardType (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL UNIQUE,
+                Fields TEXT NOT NULL,
+                Date_Created TEXT NOT NULL,
+                Is_Default INTEGER NOT NULL DEFAULT 0
+                )
+        """)
+
         # Card Table
         cur.execute("""
             CREATE TABLE Card (
@@ -65,7 +77,10 @@ def initialize_database():
                 Is_New BOOL NOT NULL DEFAULT 1,
                 Date_Created TEXT NOT NULL,
                 Last_Reviewed TEXT,
-                FOREIGN KEY (Deck_ID) REFERENCES Deck(ID)
+                Card_Type_ID INTEGER,
+                Fields TEXT,
+                FOREIGN KEY (Deck_ID) REFERENCES Deck(ID),
+                FOREIGN KEY (Card_Type_ID) REFERENCES CardType(ID)
                 )
         """)
 
@@ -84,6 +99,7 @@ def initialize_database():
 
         con.commit()
         con.close()
+        seed_default_card_type()
 
 
 # ===========================================================
@@ -146,6 +162,15 @@ def get_deck_by_id(id):
         con.close()
         return deck
 
+def update_deck_new_cards_limit(deck_id: int, new_cards_limit: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Deck SET New_Cards_Limit = ? WHERE ID = ?
+    """, (new_cards_limit, deck_id))
+    con.commit()
+    con.close()
+
 def delete_deck(deck_id):
     con = create_db_connection()
     cur = con.cursor()
@@ -170,22 +195,92 @@ def delete_deck_by_name(name):
     con.commit()
     con.close()
 
+# --- CardType Functions --------------------------------
+
+def seed_default_card_type():
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID FROM CardType WHERE Is_Default = 1")
+    if cur.fetchone() is None:
+        cur.execute("""
+            INSERT INTO CardType (Name, Fields, Date_Created, Is_Default)
+            VALUES (?, ?, ?, 1)
+        """, ('Basic', '["Front", "Back"]', date.today().strftime('%Y-%m-%d')))
+        con.commit()
+    con.close()
+
+def create_card_type(name: str, fields: list) -> int:
+    creation_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO CardType (Name, Fields, Date_Created)
+        VALUES (?, ?, ?)
+    """, (name, json.dumps(fields), creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+def get_all_card_types() -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT ID, Name, Fields, Date_Created, Is_Default FROM CardType
+        ORDER BY Is_Default DESC, Name ASC
+    """)
+    rows = cur.fetchall()
+    con.close()
+    return [models.CardType(r[0], r[1], json.loads(r[2]), r[3], r[4]) for r in rows]
+
+def get_card_type_by_id(card_type_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT ID, Name, Fields, Date_Created, Is_Default FROM CardType WHERE ID=?
+    """, (card_type_id,))
+    row = cur.fetchone()
+    con.close()
+    return models.CardType(row[0], row[1], json.loads(row[2]), row[3], row[4]) if row else None
+
+def update_card_type(card_type_id: int, name: str, fields: list):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE CardType SET Name = ?, Fields = ? WHERE ID = ? AND Is_Default = 0
+    """, (name, json.dumps(fields), card_type_id))
+    con.commit()
+    con.close()
+
+def delete_card_type(card_type_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card SET Card_Type_ID = NULL WHERE Card_Type_ID = ?
+    """, (card_type_id,))
+    cur.execute("""
+        DELETE FROM CardType WHERE ID = ? AND Is_Default = 0
+    """, (card_type_id,))
+    con.commit()
+    con.close()
+
 # --- Card Functions --------------------------------
 
-def create_card(deck_id: int, front: str, back: str):
+def create_card(deck_id: int, front: str, back: str,
+                card_type_id: int = None, fields_json: str = None) -> int:
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     cur.execute("""
-        INSERT INTO Card (Deck_ID, Card_Front, Card_Back, Date_Created)
-        VALUES (?, ?, ?, ?)
-    """, (deck_id, front, back, creation_date))
+        INSERT INTO Card (Deck_ID, Card_Front, Card_Back, Card_Type_ID, Fields, Date_Created)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (deck_id, front, back, card_type_id, fields_json, creation_date))
 
     con.commit()
     new_card_id = cur.lastrowid
     con.close()
-    
+
     return new_card_id
 
 def get_cards_by_deck(deck_id):
@@ -317,6 +412,39 @@ def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, n
     con.close()
 
 # --- Review Functions --------------------------------
+
+def get_new_cards_introduced_today(deck_id=None):
+    todays_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+
+    # A card was "introduced today" if its earliest review entry is today
+    if deck_id is not None:
+        cur.execute("""
+            SELECT COUNT(DISTINCT r.Card_ID) FROM Review r
+            JOIN Card c ON r.Card_ID = c.ID
+            WHERE c.Deck_ID = ?
+            AND r.Review_Date = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM Review r2
+                WHERE r2.Card_ID = r.Card_ID
+                AND r2.Review_Date < ?
+            )
+        """, (deck_id, todays_date, todays_date))
+    else:
+        cur.execute("""
+            SELECT COUNT(DISTINCT r.Card_ID) FROM Review r
+            WHERE r.Review_Date = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM Review r2
+                WHERE r2.Card_ID = r.Card_ID
+                AND r2.Review_Date < ?
+            )
+        """, (todays_date, todays_date))
+
+    count = cur.fetchone()[0]
+    con.close()
+    return count
 
 def create_review(card_id, rating, interval_after, ease_factor_after):
     review_date = date.today().strftime('%Y-%m-%d')
