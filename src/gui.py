@@ -10,6 +10,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         database.initialize_database()
+        database.migrate_database()
 
         self.setWindowTitle("Immersion Suite")
         self.showMaximized()

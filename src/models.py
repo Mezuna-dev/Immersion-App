@@ -1,28 +1,32 @@
 
 class Deck:
-    def __init__(self, id, name, date_created, new_cards_limit, description=None) -> None:
+    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10') -> None:
         self.id = id
         self.name = name
         self.date_created = date_created
         self.new_cards_limit = new_cards_limit
         self.description = description
+        self.learning_steps = learning_steps or '1 10'
     def __repr__(self) -> str:
-        return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\n"
+        return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\nLearning Steps: {self.learning_steps}\n"
     
 class CardType:
-    def __init__(self, id, name, fields, date_created, is_default=False) -> None:
+    def __init__(self, id, name, fields, date_created, is_default=False, front_style='', back_style='', css_style='') -> None:
         self.id = id
         self.name = name
         self.fields = fields  # list of str, already parsed from JSON
         self.date_created = date_created
         self.is_default = bool(is_default)
+        self.front_style = front_style or ''
+        self.back_style = back_style or ''
+        self.css_style = css_style or ''
 
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nName: {self.name}\nFields: {self.fields}\nDate Created: {self.date_created}\nIs Default: {self.is_default}\n"
 
 class Card:
     def __init__(self, id, deck_id, card_front, card_back, reps,
-            ease_factor, interval, due_date, is_new, date_created, last_reviewed) -> None:
+            ease_factor, interval, due_date, is_new, date_created, last_reviewed, card_type_id=None, fields_json=None, learning_step=None) -> None:
         self.id = id
         self.deck_id = deck_id
         self.card_front = card_front
@@ -34,6 +38,9 @@ class Card:
         self.is_new = is_new
         self.date_created = date_created
         self.last_reviewed = last_reviewed
+        self.card_type_id = card_type_id
+        self.fields_json = fields_json
+        self.learning_step = learning_step
 
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nDeck Id: {self.deck_id}\nFront: {self.card_front}\n \

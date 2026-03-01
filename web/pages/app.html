@@ -37,6 +37,10 @@
                 el.classList.add('view-hidden');
             });
             document.getElementById(viewId + '-view').classList.remove('view-hidden');
+            if (viewId !== 'review') {
+                var cssEl = document.getElementById('review-card-css');
+                if (cssEl) cssEl.textContent = '';
+            }
             if (viewId === 'dashboard' && bridge) bridge.refreshStats();
             if (viewId === 'srs' && bridge) bridge.getDecks();
             if (viewId === 'card-types' && bridge) bridge.getCardTypes();
@@ -156,6 +160,7 @@
             if (!deck) return;
             document.getElementById('settings-deck-name').textContent = deck.name;
             document.getElementById('settings-new-cards-limit').value = deck.new_cards_limit !== undefined ? deck.new_cards_limit : 15;
+            document.getElementById('settings-learning-steps').value = deck.learning_steps !== undefined ? deck.learning_steps : '1 10';
             showView('deck-settings');
         }
 
@@ -163,7 +168,8 @@
             if (!currentDeckForDetails || !bridge) return;
             var limit = parseInt(document.getElementById('settings-new-cards-limit').value, 10);
             if (isNaN(limit) || limit < 0) { showAlert('Please enter a valid number.'); return; }
-            bridge.saveDeckSettings(currentDeckForDetails.id, limit);
+            var learningSteps = document.getElementById('settings-learning-steps').value.trim();
+            bridge.saveDeckSettings(currentDeckForDetails.id, limit, learningSteps);
             showView('deck-details');
         }
 
@@ -171,6 +177,8 @@
         var currentCardIndex = 0;
         var currentCard = null;
         var currentDeckIdForReview = null;
+        var currentDeckLearningSteps = [];
+        var mediaBaseUrl = '';
 
         function startReview(deckId) {
             currentDeckIdForReview = deckId;
@@ -179,8 +187,10 @@
             }
         }
 
-        function updateReviewQueue(cards) {
-            reviewQueue = cards;
+        function updateReviewQueue(data) {
+            currentDeckLearningSteps = data.learning_steps || [];
+            mediaBaseUrl = data.media_base_url || '';
+            reviewQueue = data.cards || [];
             currentCardIndex = 0;
             document.getElementById('review-card-section').style.display = 'block';
             document.getElementById('review-complete-section').style.display = 'none';
@@ -192,6 +202,79 @@
             showNextCard();
         }
 
+        function applyFuriganaFilter(text, filter) {
+            // Parses "漢字[かんじ]" segments into ruby HTML (or kanji/kana only)
+            return text.replace(/([^\s\[）」』]+)\[([^\]]+)\]/g, function(match, word, reading) {
+                if (filter === 'kanji') return word;
+                if (filter === 'kana')  return reading;
+                return '<ruby>' + word + '<rt>' + reading + '</rt></ruby>';
+            });
+        }
+
+        function renderTemplate(template, fields) {
+            var result = template;
+            // Conditional blocks: {{#Field}}...{{/Field}}
+            result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
+                key = key.trim();
+                return (fields[key] && fields[key].trim()) ? content : '';
+            });
+            // Simple placeholders: {{Field}} or {{filter:Field}}
+            result = result.replace(/\{\{([^}]+)\}\}/g, function(match, key) {
+                key = key.trim();
+                var filter = null;
+                if (key.indexOf(':') !== -1) {
+                    var parts = key.split(':');
+                    filter = parts[0].trim().toLowerCase();
+                    key = parts[parts.length - 1].trim();
+                }
+                var value = fields.hasOwnProperty(key) ? (fields[key] || '') : '';
+                if (filter === 'furigana' || filter === 'kanji' || filter === 'kana') {
+                    return applyFuriganaFilter(value, filter);
+                }
+                return value;
+            });
+            return result;
+        }
+
+        function playAudioSequentially(container) {
+            var audios = Array.from(container.querySelectorAll('audio'));
+            if (audios.length === 0) return;
+            function playNext(index) {
+                if (index >= audios.length) return;
+                var audio = audios[index];
+                audio.play().catch(function(){});
+                audio.addEventListener('ended', function() { playNext(index + 1); }, { once: true });
+            }
+            playNext(0);
+        }
+
+        function resolveMedia(text) {
+            if (!text) return text;
+            text = text.replace(/\[image:([^\]]+)\]/g,
+                '<img src="' + mediaBaseUrl + '$1" style="max-width:100%;max-height:300px;border-radius:6px;display:block;margin:0.5rem auto;">');
+            text = text.replace(/\[sound:([^\]]+)\]/g,
+                '<audio controls src="' + mediaBaseUrl + '$1" style="display:block;margin:0.5rem auto;"></audio>');
+            // Handle bare <img src="filename"> from Anki templates (no protocol or path separator in src)
+            text = text.replace(/(<img\b[^>]*?\bsrc=")([^"\/\\:]+)(")/gi,
+                '$1' + mediaBaseUrl + '$2$3');
+            return text;
+        }
+
+        function attachMedia(btn) {
+            var fieldName = btn.getAttribute('data-field');
+            var mediaType = btn.getAttribute('data-media');
+            if (!bridge) return;
+            bridge.selectMediaFile(mediaType, function(result) {
+                if (result) {
+                    var ta = document.querySelector('.card-field-input[data-field="' + fieldName + '"]');
+                    if (ta) {
+                        if (ta.value && !ta.value.endsWith('\n')) ta.value += '\n';
+                        ta.value += result;
+                    }
+                }
+            });
+        }
+
         function showNextCard() {
             if (currentCardIndex >= reviewQueue.length) {
                 showReviewComplete();
@@ -200,30 +283,86 @@
             currentCard = reviewQueue[currentCardIndex];
             document.getElementById('review-progress').textContent =
                 (currentCardIndex + 1) + ' / ' + reviewQueue.length;
-            document.getElementById('review-front-text').textContent = currentCard.front;
+            document.getElementById('review-card-css').textContent = currentCard.css_style || '';
+            var frontEl = document.getElementById('review-front-text');
+            if (currentCard.front_style) {
+                frontEl.innerHTML = resolveMedia(renderTemplate(currentCard.front_style, currentCard.fields || {}));
+            } else {
+                var ft = currentCard.front || '';
+                if (ft.indexOf('[image:') !== -1 || ft.indexOf('[sound:') !== -1) {
+                    frontEl.innerHTML = resolveMedia(ft);
+                } else {
+                    frontEl.textContent = ft;
+                }
+            }
+            playAudioSequentially(frontEl);
             document.getElementById('review-back-container').style.display = 'none';
             document.getElementById('review-rating-buttons').style.display = 'none';
             document.getElementById('review-show-answer-btn').style.display = 'block';
         }
 
         function revealAnswer() {
-            document.getElementById('review-back-text').textContent = currentCard.back;
+            var backEl = document.getElementById('review-back-text');
+            if (currentCard.back_style) {
+                backEl.innerHTML = resolveMedia(renderTemplate(currentCard.back_style, currentCard.fields || {}));
+            } else {
+                var bt = currentCard.back || '';
+                if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
+                    backEl.innerHTML = resolveMedia(bt);
+                } else {
+                    backEl.textContent = bt;
+                }
+            }
+            playAudioSequentially(backEl);
             document.getElementById('review-back-container').style.display = 'block';
             document.getElementById('review-rating-buttons').style.display = 'flex';
             document.getElementById('review-show-answer-btn').style.display = 'none';
         }
 
         function rateCard(rating) {
-            if (bridge && currentCard) {
+            if (!bridge || !currentCard) return;
+            var steps = currentDeckLearningSteps;
+
+            if (currentCard.is_new && steps.length > 0) {
+                var curStep = (currentCard.learning_step !== null && currentCard.learning_step !== undefined)
+                    ? currentCard.learning_step : -1;
+                var newStep;
+
+                if (rating === 1) {         // Again → reset to step 0
+                    newStep = 0;
+                } else if (rating === 3) {  // Hard → stay at current (or step 0 if fresh)
+                    newStep = Math.max(0, curStep);
+                } else if (rating === 4) {  // Good → advance
+                    newStep = curStep + 1;
+                } else {                    // Easy → graduate immediately
+                    newStep = steps.length;
+                }
+
+                if (newStep >= steps.length) {
+                    // Graduate: run through SM-2
+                    bridge.submitRating(currentCard.id, rating);
+                    currentCardIndex++;
+                } else {
+                    // Advance learning step, requeue card
+                    bridge.updateCardLearningStep(currentCard.id, newStep);
+                    var requeueCard = Object.assign({}, currentCard, { learning_step: newStep });
+                    var insertAt = Math.min(currentCardIndex + 1 + Math.min(newStep + 1, 3), reviewQueue.length);
+                    reviewQueue.splice(insertAt, 0, requeueCard);
+                    currentCardIndex++;
+                }
+            } else {
                 bridge.submitRating(currentCard.id, rating);
                 currentCardIndex++;
-                showNextCard();
             }
+
+            showNextCard();
         }
 
         function showReviewComplete() {
             document.getElementById('review-card-section').style.display = 'none';
             document.getElementById('review-complete-section').style.display = 'block';
+            var cssEl = document.getElementById('review-card-css');
+            if (cssEl) cssEl.textContent = '';
         }
 
         function updateCardTypes(types) {
@@ -278,7 +417,11 @@
                 wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + fieldName + '</label>' +
                     '<textarea class="form-control card-field-input" data-field="' + fieldName +
                     '" placeholder="Enter ' + fieldName +
-                    '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>';
+                    '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>' +
+                    '<div class="mt-1 d-flex gap-2">' +
+                    '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="image" onclick="attachMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
+                    '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="audio" onclick="attachMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
+                    '</div>';
                 container.appendChild(wrapper);
             });
         }
@@ -305,6 +448,9 @@
         function initCreateCardTypeView() {
             document.getElementById('card-type-name').value = '';
             document.getElementById('card-type-fields-list').innerHTML = '';
+            document.getElementById('card-type-front-style').value = '';
+            document.getElementById('card-type-back-style').value = '';
+            document.getElementById('card-type-css-style').value = '';
             fieldCounter = 0;
             addCardTypeField('');
             addCardTypeField('');
@@ -316,7 +462,10 @@
             var inputs = document.querySelectorAll('.card-type-field-input');
             var fields = Array.from(inputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
             if (fields.length === 0) { showAlert('Please add at least one field.'); return; }
-            if (bridge) { bridge.createCardType(name, JSON.stringify(fields)); showView('card-types'); }
+            var frontStyle = document.getElementById('card-type-front-style').value;
+            var backStyle = document.getElementById('card-type-back-style').value;
+            var cssStyle = document.getElementById('card-type-css-style').value;
+            if (bridge) { bridge.createCardType(name, JSON.stringify(fields), frontStyle, backStyle, cssStyle); showView('card-types'); }
         }
 
         var currentEditingCardType = null;
@@ -329,6 +478,9 @@
             document.getElementById('edit-card-type-fields-list').innerHTML = '';
             fieldCounter = 0;
             ct.fields.forEach(function(f) { addEditCardTypeField(f); });
+            document.getElementById('edit-card-type-front-style').value = ct.front_style || '';
+            document.getElementById('edit-card-type-back-style').value = ct.back_style || '';
+            document.getElementById('edit-card-type-css-style').value = ct.css_style || '';
             showView('edit-card-type');
         }
 
@@ -358,7 +510,10 @@
             var inputs = document.querySelectorAll('.edit-card-type-field-input');
             var fields = Array.from(inputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
             if (fields.length === 0) { showAlert('Please add at least one field.'); return; }
-            if (bridge) { bridge.updateCardType(currentEditingCardType.id, name, JSON.stringify(fields)); showView('card-types'); }
+            var frontStyle = document.getElementById('edit-card-type-front-style').value;
+            var backStyle = document.getElementById('edit-card-type-back-style').value;
+            var cssStyle = document.getElementById('edit-card-type-css-style').value;
+            if (bridge) { bridge.updateCardType(currentEditingCardType.id, name, JSON.stringify(fields), frontStyle, backStyle, cssStyle); showView('card-types'); }
         }
 
         function blurActiveElement(modalEl) {
@@ -510,6 +665,10 @@
                             <label class="form-label" for="settings-new-cards-limit" style="font-size: 1rem;">New cards per day</label>
                             <input type="number" class="form-control" id="settings-new-cards-limit" min="0"
                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 8rem;">
+                            <label class="form-label d-block" for="settings-learning-steps" style="font-size: 1rem; margin-top: 1.25rem;">Learning steps (minutes)</label>
+                            <input type="text" class="form-control" id="settings-learning-steps" placeholder="e.g. 1 10"
+                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 12rem;">
+                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Space-separated minutes. New cards repeat through each step before graduating.</small>
                         </div>
                     </div>
                     <div class="mt-3">
@@ -535,6 +694,18 @@
                         <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;">Fields</label>
                         <div id="card-type-fields-list"></div>
                         <button class="btn btn-dark mt-2" onclick="addCardTypeField()" style="background-color: #9067C6; animation: fadeIn 0.6s ease;">+ Add Field</button>
+                        <div class="mt-4">
+                            <label class="form-label h2" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;">Styling <span style="font-size: 1rem; font-weight: 400; opacity: 0.7;">(optional)</span></label>
+                            <label class="form-label d-block" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="card-type-front-style">Front Template</label>
+                            <textarea class="form-control" id="card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="card-type-back-style">Back Template</label>
+                            <textarea class="form-control" id="card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="card-type-css-style">CSS</label>
+                            <textarea class="form-control" id="card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
+                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                        </div>
                     </div>
                     <div class="mt-4">
                         <button class="btn btn-dark" onclick="submitCreateCardType()" style="width: 10rem; height: 3rem; background-color: #9067C6; font-size: large; font-weight: 600;">Confirm</button>
@@ -552,6 +723,18 @@
                         <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;">Fields</label>
                         <div id="edit-card-type-fields-list"></div>
                         <button class="btn btn-dark mt-2" onclick="addEditCardTypeField()" style="background-color: #9067C6; animation: fadeIn 0.6s ease;">+ Add Field</button>
+                        <div class="mt-4">
+                            <label class="form-label h2" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;">Styling <span style="font-size: 1rem; font-weight: 400; opacity: 0.7;">(optional)</span></label>
+                            <label class="form-label d-block" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="edit-card-type-front-style">Front Template</label>
+                            <textarea class="form-control" id="edit-card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="edit-card-type-back-style">Back Template</label>
+                            <textarea class="form-control" id="edit-card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="edit-card-type-css-style">CSS</label>
+                            <textarea class="form-control" id="edit-card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
+                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                        </div>
                     </div>
                     <div class="mt-4">
                         <button class="btn btn-dark" onclick="submitEditCardType()" style="width: 10rem; height: 3rem; background-color: #9067C6; font-size: large; font-weight: 600;">Save</button>
@@ -579,6 +762,7 @@
 
                 <!-- Review View -->
                 <div id="review-view" class="view-section view-hidden text-white">
+                    <style id="review-card-css"></style>
                     <!-- Card Section -->
                     <div id="review-card-section" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
                         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -587,12 +771,12 @@
                         </div>
                         <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
                             <div class="card-body d-flex flex-column justify-content-center align-items-center" style="min-height: 200px;">
-                                <p id="review-front-text" style="font-size: 1.5rem; color: white; text-align: center;"></p>
+                                <div id="review-front-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
                             </div>
                             <div id="review-back-container" style="display: none; width: 100%; text-align: center;">
                                 <hr style="border-color: #9067C6; width: 70%; margin: 2rem auto;">
                                 <div class="card-body d-flex flex-column justify-content-center align-items-center" style="min-height: 150px;">
-                                    <p id="review-back-text" style="font-size: 1.5rem; color: white; text-align: center;"></p>
+                                    <div id="review-back-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
                                 </div>
                             </div>
                         </div>

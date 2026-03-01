@@ -48,7 +48,8 @@ def initialize_database():
                 Name TEXT NOT NULL,
                 Date_Created TEXT NOT NULL,
                 New_Cards_Limit INTEGER NOT NULL DEFAULT 15,
-                Description TEXT
+                Description TEXT,
+                Learning_Steps TEXT DEFAULT '1 10'
                 )
         """)
 
@@ -59,7 +60,10 @@ def initialize_database():
                 Name TEXT NOT NULL UNIQUE,
                 Fields TEXT NOT NULL,
                 Date_Created TEXT NOT NULL,
-                Is_Default INTEGER NOT NULL DEFAULT 0
+                Is_Default INTEGER NOT NULL DEFAULT 0,
+                Front_Style TEXT DEFAULT '',
+                Back_Style TEXT DEFAULT '',
+                CSS_Style TEXT DEFAULT ''
                 )
         """)
 
@@ -79,6 +83,7 @@ def initialize_database():
                 Last_Reviewed TEXT,
                 Card_Type_ID INTEGER,
                 Fields TEXT,
+                Learning_Step INTEGER,
                 FOREIGN KEY (Deck_ID) REFERENCES Deck(ID),
                 FOREIGN KEY (Card_Type_ID) REFERENCES CardType(ID)
                 )
@@ -100,6 +105,21 @@ def initialize_database():
         con.commit()
         con.close()
         seed_default_card_type()
+
+
+def migrate_database():
+    con = create_db_connection()
+    cur = con.cursor()
+    for stmt in [
+        "ALTER TABLE Deck ADD COLUMN Learning_Steps TEXT DEFAULT '1 10'",
+        "ALTER TABLE Card ADD COLUMN Learning_Step INTEGER",
+    ]:
+        try:
+            cur.execute(stmt)
+            con.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+    con.close()
 
 
 # ===========================================================
@@ -132,11 +152,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps FROM Deck""")
     rows = cur.fetchall()
-    
+
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4])
+        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10')
         decks.append(deck)
 
     con.close()
@@ -147,7 +167,7 @@ def get_deck_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Name, Date_Created, New_Cards_Limit FROM Deck
+        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps FROM Deck
         WHERE ID=?
     """, (id,))
 
@@ -157,17 +177,17 @@ def get_deck_by_id(id):
         con.close()
         return None
     else:
-        deck = models.Deck(row[0], row[1], row[2], row[3])
-        
+        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10')
+
         con.close()
         return deck
 
-def update_deck_new_cards_limit(deck_id: int, new_cards_limit: int):
+def update_deck_settings(deck_id: int, new_cards_limit: int, learning_steps: str = '1 10'):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        UPDATE Deck SET New_Cards_Limit = ? WHERE ID = ?
-    """, (new_cards_limit, deck_id))
+        UPDATE Deck SET New_Cards_Limit = ?, Learning_Steps = ? WHERE ID = ?
+    """, (new_cards_limit, learning_steps, deck_id))
     con.commit()
     con.close()
 
@@ -209,14 +229,25 @@ def seed_default_card_type():
         con.commit()
     con.close()
 
-def create_card_type(name: str, fields: list) -> int:
+def get_or_create_card_type(name: str, fields: list, front_style: str = '', back_style: str = '', css_style: str = '') -> int:
+    """Return the ID of an existing CardType with this name, or create a new one."""
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID FROM CardType WHERE Name = ?", (name,))
+    row = cur.fetchone()
+    con.close()
+    if row:
+        return row[0]
+    return create_card_type(name, fields, front_style, back_style, css_style)
+
+def create_card_type(name: str, fields: list, front_style: str = '', back_style: str = '', css_style: str = '') -> int:
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        INSERT INTO CardType (Name, Fields, Date_Created)
-        VALUES (?, ?, ?)
-    """, (name, json.dumps(fields), creation_date))
+        INSERT INTO CardType (Name, Fields, Date_Created, Front_Style, Back_Style, CSS_Style)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, json.dumps(fields), creation_date, front_style, back_style, css_style))
     con.commit()
     new_id = cur.lastrowid
     con.close()
@@ -226,29 +257,29 @@ def get_all_card_types() -> list:
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        SELECT ID, Name, Fields, Date_Created, Is_Default FROM CardType
+        SELECT ID, Name, Fields, Date_Created, Is_Default, Front_Style, Back_Style, CSS_Style FROM CardType
         ORDER BY Is_Default DESC, Name ASC
     """)
     rows = cur.fetchall()
     con.close()
-    return [models.CardType(r[0], r[1], json.loads(r[2]), r[3], r[4]) for r in rows]
+    return [models.CardType(r[0], r[1], json.loads(r[2]), r[3], r[4], r[5] or '', r[6] or '', r[7] or '') for r in rows]
 
 def get_card_type_by_id(card_type_id: int):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        SELECT ID, Name, Fields, Date_Created, Is_Default FROM CardType WHERE ID=?
+        SELECT ID, Name, Fields, Date_Created, Is_Default, Front_Style, Back_Style, CSS_Style FROM CardType WHERE ID=?
     """, (card_type_id,))
     row = cur.fetchone()
     con.close()
-    return models.CardType(row[0], row[1], json.loads(row[2]), row[3], row[4]) if row else None
+    return models.CardType(row[0], row[1], json.loads(row[2]), row[3], row[4], row[5] or '', row[6] or '', row[7] or '') if row else None
 
-def update_card_type(card_type_id: int, name: str, fields: list):
+def update_card_type(card_type_id: int, name: str, fields: list, front_style: str = '', back_style: str = '', css_style: str = ''):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        UPDATE CardType SET Name = ?, Fields = ? WHERE ID = ? AND Is_Default = 0
-    """, (name, json.dumps(fields), card_type_id))
+        UPDATE CardType SET Name = ?, Fields = ?, Front_Style = ?, Back_Style = ?, CSS_Style = ? WHERE ID = ? AND Is_Default = 0
+    """, (name, json.dumps(fields), front_style, back_style, css_style, card_type_id))
     con.commit()
     con.close()
 
@@ -290,16 +321,16 @@ def get_cards_by_deck(deck_id):
     cards = []
 
     cur.execute("""
-        SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, 
-        Ease_Factor, Interval, Due_Date, Is_New, Date_Created, 
-        Last_Reviewed FROM Card
+        SELECT ID, Deck_ID, Card_Front, Card_Back, Reps,
+        Ease_Factor, Interval, Due_Date, Is_New, Date_Created,
+        Last_Reviewed, Card_Type_ID FROM Card
         WHERE Deck_ID=?
         """, (deck_id,))
-    
+
     rows = cur.fetchall()
-    
+
     for row in rows:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
         cards.append(card)
 
     con.close()
@@ -310,9 +341,9 @@ def get_card_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, 
-        Ease_Factor, Interval, Due_Date, Is_New, Date_Created, 
-        Last_Reviewed FROM Card
+        SELECT ID, Deck_ID, Card_Front, Card_Back, Reps,
+        Ease_Factor, Interval, Due_Date, Is_New, Date_Created,
+        Last_Reviewed, Card_Type_ID FROM Card
         WHERE ID=?
         """, (id,))
 
@@ -322,7 +353,7 @@ def get_card_by_id(id):
     if row is None:
         return None
     else:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
         return card
     
 def get_due_cards(deck_id=None):
@@ -334,7 +365,7 @@ def get_due_cards(deck_id=None):
     cards = []
 
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
-    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed FROM Card " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
     "WHERE Due_Date <= ? AND Due_Date IS NOT NULL"
 
     query_params = [todays_date]
@@ -344,11 +375,11 @@ def get_due_cards(deck_id=None):
         query_params.append(deck_id)
 
     cur.execute(query_string, query_params)
-        
+
     rows = cur.fetchall()
-    
+
     for row in rows:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
         cards.append(card)
 
     con.close()
@@ -361,7 +392,7 @@ def get_new_cards(deck_id=None, limit=None):
     cards = []
 
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
-    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed FROM Card " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
     "WHERE Is_New = 1 AND Due_Date IS NULL"
 
     query_params = []
@@ -374,11 +405,11 @@ def get_new_cards(deck_id=None, limit=None):
         query_params.append(limit)
 
     cur.execute(query_string, query_params)
-        
+
     rows = cur.fetchall()
-    
+
     for row in rows:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
         cards.append(card)
 
     con.close()
@@ -396,6 +427,16 @@ def delete_card(card_id):
     con.commit()
     con.close()
 
+def update_card_learning_step(card_id: int, learning_step: int):
+    today = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card SET Learning_Step = ?, Due_Date = ? WHERE ID = ?
+    """, (learning_step, today, card_id))
+    con.commit()
+    con.close()
+
 def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, new_due_date, is_new):
     todays_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
@@ -403,8 +444,8 @@ def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, n
 
     cur.execute("""
         UPDATE Card
-        SET Reps = ?, Ease_Factor = ?, Interval = ?, Due_Date = ?, 
-        Is_New = ?, Last_Reviewed = ?
+        SET Reps = ?, Ease_Factor = ?, Interval = ?, Due_Date = ?,
+        Is_New = ?, Last_Reviewed = ?, Learning_Step = NULL
         WHERE ID=?
         """, (new_reps, new_ease_factor, new_interval, new_due_date, is_new, todays_date, card_id))
     

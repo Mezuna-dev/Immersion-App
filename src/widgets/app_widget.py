@@ -1,4 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFileDialog
+import shutil
 from PyQt6.QtCore import QObject, pyqtSlot, QUrl
 from PyQt6.QtGui import QColor
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -43,7 +44,8 @@ class AppBridge(QObject):
                 'new': new_count,
                 'total': len(total_count),
                 'description': deck.description,
-                'new_cards_limit': deck.new_cards_limit
+                'new_cards_limit': deck.new_cards_limit,
+                'learning_steps': deck.learning_steps or '1 10'
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
@@ -67,24 +69,27 @@ class AppBridge(QObject):
             'id': ct.id,
             'name': ct.name,
             'fields': ct.fields,
-            'is_default': ct.is_default
+            'is_default': ct.is_default,
+            'front_style': ct.front_style,
+            'back_style': ct.back_style,
+            'css_style': ct.css_style
         } for ct in card_types])
         self.web_view.page().runJavaScript(f'updateCardTypes({payload});')
 
-    @pyqtSlot(str, str)
-    def createCardType(self, name, fields_json):
+    @pyqtSlot(str, str, str, str, str)
+    def createCardType(self, name, fields_json, front_style, back_style, css_style):
         fields = json.loads(fields_json)
         fields = [f.strip() for f in fields if isinstance(f, str) and f.strip()]
         if name.strip() and fields:
-            database.create_card_type(name.strip(), fields)
+            database.create_card_type(name.strip(), fields, front_style, back_style, css_style)
         self.getCardTypes()
 
-    @pyqtSlot(int, str, str)
-    def updateCardType(self, card_type_id, name, fields_json):
+    @pyqtSlot(int, str, str, str, str, str)
+    def updateCardType(self, card_type_id, name, fields_json, front_style, back_style, css_style):
         fields = json.loads(fields_json)
         fields = [f.strip() for f in fields if isinstance(f, str) and f.strip()]
         if name.strip() and fields:
-            database.update_card_type(card_type_id, name.strip(), fields)
+            database.update_card_type(card_type_id, name.strip(), fields, front_style, back_style, css_style)
         self.getCardTypes()
 
     @pyqtSlot(int)
@@ -106,27 +111,78 @@ class AppBridge(QObject):
         database.create_card(deck_id, front, back, card_type_id, fields_json)
         self.refreshStats()
 
-    @pyqtSlot(int, int)
-    def saveDeckSettings(self, deck_id, new_cards_limit):
-        database.update_deck_new_cards_limit(deck_id, new_cards_limit)
+    @pyqtSlot(int, int, str)
+    def saveDeckSettings(self, deck_id, new_cards_limit, learning_steps_str):
+        database.update_deck_settings(deck_id, new_cards_limit, learning_steps_str)
         self.getDecks()
+
+    @pyqtSlot(int, int)
+    def updateCardLearningStep(self, card_id, learning_step):
+        database.update_card_learning_step(card_id, learning_step)
+
+    @pyqtSlot(str, result=str)
+    def selectMediaFile(self, file_type):
+        from pathlib import Path
+        media_dir = database.BASE_DIR / 'data' / 'media'
+        media_dir.mkdir(parents=True, exist_ok=True)
+
+        if file_type == 'audio':
+            filter_str = "Audio Files (*.mp3 *.wav *.ogg *.m4a *.flac)"
+        else:
+            filter_str = "Image Files (*.png *.jpg *.jpeg *.gif *.webp *.bmp)"
+
+        main_window = self.web_view.window()
+        file_path, _ = QFileDialog.getOpenFileName(main_window, "Select File", "", filter_str)
+        if not file_path:
+            return ''
+
+        stem = Path(file_path).stem
+        suffix = Path(file_path).suffix.lower()
+        filename = stem + suffix
+        dest = media_dir / filename
+        counter = 1
+        while dest.exists():
+            filename = f"{stem}_{counter}{suffix}"
+            dest = media_dir / filename
+            counter += 1
+        shutil.copy2(file_path, dest)
+
+        tag = 'sound' if file_type == 'audio' else 'image'
+        return f'[{tag}:{filename}]'
 
     @pyqtSlot(int)
     def startReview(self, deck_id):
         deck = database.get_deck_by_id(deck_id)
         new_limit = deck.new_cards_limit if deck else 15
+        learning_steps_str = deck.learning_steps if deck else '1 10'
+        learning_steps = [int(s) for s in learning_steps_str.split() if s.strip().isdigit()]
         introduced_today = database.get_new_cards_introduced_today(deck_id=deck_id)
         remaining_new = max(0, new_limit - introduced_today)
         due_cards = database.get_due_cards(deck_id=deck_id)
         new_cards = database.get_new_cards(deck_id=deck_id, limit=remaining_new)
+        card_type_map = {ct.id: ct for ct in database.get_all_card_types()}
         cards = []
         for card in due_cards + new_cards:
+            ct = card_type_map.get(card.card_type_id)
+            try:
+                fields = json.loads(card.fields_json) if card.fields_json else {}
+            except (TypeError, ValueError):
+                fields = {}
             cards.append({
                 'id': card.id,
                 'front': card.card_front,
                 'back': card.card_back,
+                'fields': fields,
+                'front_style': ct.front_style if ct else '',
+                'back_style': ct.back_style if ct else '',
+                'css_style': ct.css_style if ct else '',
+                'is_new': bool(card.is_new),
+                'learning_step': card.learning_step,
             })
-        payload = json.dumps(cards)
+        media_dir = database.BASE_DIR / 'data' / 'media'
+        media_dir.mkdir(parents=True, exist_ok=True)
+        media_base_url = QUrl.fromLocalFile(str(media_dir)).toString() + '/'
+        payload = json.dumps({'learning_steps': learning_steps, 'cards': cards, 'media_base_url': media_base_url})
         self.web_view.page().runJavaScript(f'updateReviewQueue({payload});')
 
     @pyqtSlot(int, int)
