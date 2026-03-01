@@ -7,6 +7,7 @@ import io
 import database
 import shutil
 import zstandard as zstd
+from datetime import date, timedelta, datetime
 
 
 # ===========================================================
@@ -53,6 +54,19 @@ def extract_apkg(apkg_path):
 # Section: Media Import
 # ===========================================================
 
+ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
+
+
+def _copy_media_file(src: Path, dest: Path):
+    """Copy src to dest, decompressing zstd if the file starts with the zstd magic bytes."""
+    raw = src.read_bytes()
+    if raw[:4] == ZSTD_MAGIC:
+        dctx = zstd.ZstdDecompressor()
+        with dctx.stream_reader(io.BytesIO(raw)) as reader:
+            raw = reader.read()
+    dest.write_bytes(raw)
+
+
 def import_media(import_path, apkg_path=None):
     """Copy media files from extracted apkg to data/media/. Returns set of imported filenames."""
     dest_dir = database.BASE_DIR / 'data' / 'media'
@@ -85,7 +99,7 @@ def import_media(import_path, apkg_path=None):
         for src in media_path.iterdir():
             log.append(f"  {src.name}")
             if src.is_file():
-                shutil.copy2(str(src), str(dest_dir / src.name))
+                _copy_media_file(src, dest_dir / src.name)
                 imported.add(src.name)
         _write_media_log(log, imported)
         return imported
@@ -104,18 +118,30 @@ def import_media(import_path, apkg_path=None):
                 with dctx.stream_reader(io.BytesIO(raw_bytes)) as reader:
                     raw_bytes = reader.read()
                 log.append("media file was zstd-compressed — decompressed successfully")
-            raw = json.loads(raw_bytes.decode('utf-8'))
-            if isinstance(raw, dict):
-                media_map = raw
-                log.append(f"media JSON parsed — {len(media_map)} entries")
-                for k, v in list(media_map.items())[:20]:
-                    log.append(f"  {k!r}: {v!r}")
-                if len(media_map) > 20:
-                    log.append(f"  ... ({len(media_map) - 20} more)")
-            else:
-                log.append(f"media JSON is not a dict: {type(raw)}")
+            try:
+                raw = json.loads(raw_bytes.decode('utf-8'))
+                if isinstance(raw, dict):
+                    media_map = raw
+                    log.append(f"media JSON parsed — {len(media_map)} entries")
+                    for k, v in list(media_map.items())[:20]:
+                        log.append(f"  {k!r}: {v!r}")
+                    if len(media_map) > 20:
+                        log.append(f"  ... ({len(media_map) - 20} more)")
+                else:
+                    log.append(f"media JSON is not a dict: {type(raw)}")
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as json_ex:
+                log.append(f"media JSON parse failed ({json_ex}) — trying protobuf")
+                try:
+                    media_map = parse_media_manifest_proto(raw_bytes)
+                    log.append(f"media manifest parsed as protobuf — {len(media_map)} entries")
+                    for k, v in list(media_map.items())[:20]:
+                        log.append(f"  {k!r}: {v!r}")
+                    if len(media_map) > 20:
+                        log.append(f"  ... ({len(media_map) - 20} more)")
+                except Exception as proto_ex:
+                    log.append(f"media protobuf parse error: {proto_ex}")
         except Exception as ex:
-            log.append(f"media JSON parse error: {ex}")
+            log.append(f"media file read/decompress error: {ex}")
     else:
         log.append("\nNo 'media' file or directory found in extracted path")
 
@@ -137,7 +163,7 @@ def import_media(import_path, apkg_path=None):
         copied = False
         for src, dest_name in candidates:
             if src.is_file():
-                shutil.copy2(str(src), str(dest_dir / dest_name))
+                _copy_media_file(src, dest_dir / dest_name)
                 imported.add(dest_name)
                 log.append(f"  COPIED {src.name!r} -> {dest_name!r}")
                 copied = True
@@ -159,7 +185,7 @@ def import_media(import_path, apkg_path=None):
                  '.mp4', '.webm', '.ogv'}
     for src in import_path.iterdir():
         if src.is_file() and src.name not in NON_MEDIA and src.suffix.lower() in MEDIA_EXT:
-            shutil.copy2(str(src), str(dest_dir / src.name))
+            _copy_media_file(src, dest_dir / src.name)
             imported.add(src.name)
             log.append(f"  fallback copied {src.name!r}")
 
@@ -201,8 +227,89 @@ def convert_anki_media_refs(text):
 
 
 # ===========================================================
-# Section: Protobuf String Extraction (for new Anki format)
+# Section: Protobuf Parsing (for new Anki format)
 # ===========================================================
+
+def _parse_varint(data, pos):
+    """Parse a protobuf varint from data at pos. Returns (value, new_pos)."""
+    result = 0
+    shift = 0
+    while pos < len(data):
+        b = data[pos]; pos += 1
+        result |= (b & 0x7F) << shift
+        shift += 7
+        if not (b & 0x80):
+            break
+    return result, pos
+
+
+def _parse_proto_message(data):
+    """Parse protobuf message fields. Returns list of (field_num, wire_type, value)."""
+    fields = []
+    pos = 0
+    try:
+        while pos < len(data):
+            tag, pos = _parse_varint(data, pos)
+            if tag == 0:
+                break
+            field_num = tag >> 3
+            wire_type = tag & 0x7
+
+            if wire_type == 0:
+                val, pos = _parse_varint(data, pos)
+                fields.append((field_num, 0, val))
+            elif wire_type == 1:
+                if pos + 8 > len(data): break
+                fields.append((field_num, 1, data[pos:pos + 8]))
+                pos += 8
+            elif wire_type == 2:
+                length, pos = _parse_varint(data, pos)
+                if pos + length > len(data): break
+                val = bytes(data[pos:pos + length])
+                pos += length
+                fields.append((field_num, 2, val))
+            elif wire_type == 5:
+                if pos + 4 > len(data): break
+                fields.append((field_num, 5, data[pos:pos + 4]))
+                pos += 4
+            else:
+                break
+    except Exception:
+        pass
+    return fields
+
+
+def parse_media_manifest_proto(data):
+    """
+    Parse the new Anki media manifest protobuf into {zip_filename: actual_filename}.
+
+    Structure:
+      MediaEntries { repeated MediaEntry entries = 1; }
+      MediaEntry   { string name = 1; bytes sha1 = 2; uint32 size = 3; bool deleted = 4; }
+
+    The nth entry (0-indexed) in the repeated field corresponds to the zip file named str(n),
+    matching the numeric filenames ('0', '1', '2', ...) extracted from the apkg.
+    """
+    result = {}
+    entry_index = 0
+    for field_num, wire_type, value in _parse_proto_message(data):
+        if field_num == 1 and wire_type == 2:
+            # Each field-1 LEN blob is a MediaEntry
+            name = None
+            deleted = False
+            for ef_num, ef_wt, ef_val in _parse_proto_message(value):
+                if ef_num == 1 and ef_wt == 2:       # string name
+                    try:
+                        name = ef_val.decode('utf-8')
+                    except UnicodeDecodeError:
+                        pass
+                elif ef_num == 4 and ef_wt == 0:     # bool deleted
+                    deleted = bool(ef_val)
+            if name and not deleted:
+                result[str(entry_index)] = name
+            entry_index += 1
+    return result
+
 
 def extract_proto_strings(data):
     """
@@ -387,6 +494,61 @@ def explore_anki_database(db_path):
 
 
 # ===========================================================
+# Section: Scheduling
+# ===========================================================
+
+# Anki revlog ease → app rating  (1=Again, 2=Hard, 3=Good, 4=Easy)
+_EASE_TO_RATING = {1: 1, 2: 3, 3: 4, 4: 5}
+
+
+def _get_col_crt_date(cur):
+    """
+    Read the collection creation date from col.crt (Unix timestamp).
+    Anki's review due values are day offsets from this date, NOT from a fixed epoch.
+    Falls back to today if unavailable.
+    """
+    try:
+        cur.execute("SELECT crt FROM col LIMIT 1")
+        row = cur.fetchone()
+        if row and row[0]:
+            return datetime.fromtimestamp(row[0]).date()
+    except Exception:
+        pass
+    return date.today()
+
+
+def _anki_scheduling(anki_type, anki_queue, due, ivl, factor, reps, crt_date):
+    """
+    Convert Anki card scheduling fields to app Card fields.
+
+    Anki card types:
+      0 = New       queue 0
+      1 = Learning  queue 1 (due = seconds timestamp) or 3 (due = day offset)
+      2 = Review    queue 2  (due = days since crt_date)
+      3 = Relearn   queue 1/3
+
+    Returns a dict with keys: is_new, reps, ease_factor, interval, due_date, last_reviewed
+    """
+    if anki_type == 2 and anki_queue == 2:
+        # Graduated review card — due is days since collection creation date
+        ease = round(factor / 1000.0, 4) if factor else 2.5
+        interval = ivl if ivl > 0 else 1
+        due_date = (crt_date + timedelta(days=due)).strftime('%Y-%m-%d')
+        last_reviewed = (crt_date + timedelta(days=due - interval)).strftime('%Y-%m-%d')
+        return dict(is_new=False, reps=reps, ease_factor=ease,
+                    interval=interval, due_date=due_date, last_reviewed=last_reviewed)
+
+    if anki_type in (1, 3):
+        # In learning or relearning — treat as new so it surfaces immediately
+        return dict(is_new=True, reps=reps, ease_factor=2.5,
+                    interval=0, due_date=None, last_reviewed=None)
+
+    # New card (type 0) — default state
+    return dict(is_new=True, reps=0, ease_factor=2.5,
+                interval=0, due_date=None, last_reviewed=None)
+
+
+# ===========================================================
 # Section: Main Import Function
 # ===========================================================
 
@@ -405,6 +567,9 @@ def import_anki_deck(apkg_path):
     note_types = get_note_types_old(cur)
     if not note_types:
         note_types = get_note_types_new(cur)
+
+    # --- Read collection creation date (base for all due-day offsets) ---
+    crt_date = _get_col_crt_date(cur)
 
     # --- Create card types in our DB (one per Anki note type) ---
     note_type_mapping = {}  # anki_mid -> our card_type_id
@@ -444,6 +609,9 @@ def import_anki_deck(apkg_path):
     cur.execute("SELECT id, flds, mid FROM notes")
     notes = cur.fetchall()
 
+    # anki_card_id → our_card_id  (needed for revlog import)
+    anki_cid_map = {}
+
     for note_id, flds, mid in notes:
         raw_fields = flds.split('\x1f')
 
@@ -461,25 +629,54 @@ def import_anki_deck(apkg_path):
         front = converted_values[0] if converted_values else ''
         back = ' / '.join(converted_values[1:]) if len(converted_values) > 1 else ''
 
-        # Find the deck this note's card belongs to
-        cur.execute("SELECT did FROM cards WHERE nid = ?", (note_id,))
+        # Fetch the first card for this note (ord=0) to get deck + scheduling
+        cur.execute(
+            "SELECT id, did, type, queue, due, ivl, factor, reps FROM cards WHERE nid = ? ORDER BY ord LIMIT 1",
+            (note_id,)
+        )
         card_row = cur.fetchone()
         if not card_row:
             continue
 
-        our_deck_id = deck_id_mapping.get(card_row[0])
+        anki_cid, anki_did, a_type, a_queue, a_due, a_ivl, a_factor, a_reps = card_row
+
+        our_deck_id = deck_id_mapping.get(anki_did)
         if not our_deck_id:
             continue
 
         our_card_type_id = note_type_mapping.get(mid)
+        sched = _anki_scheduling(a_type, a_queue, a_due, a_ivl, a_factor, a_reps, crt_date)
 
-        database.create_card(
+        our_card_id = database.create_card(
             our_deck_id,
             front,
             back,
             card_type_id=our_card_type_id,
             fields_json=json.dumps(fields_json),
+            reps=sched['reps'],
+            ease_factor=sched['ease_factor'],
+            interval=sched['interval'],
+            due_date=sched['due_date'],
+            is_new=sched['is_new'],
+            last_reviewed=sched['last_reviewed'],
         )
+        anki_cid_map[anki_cid] = our_card_id
+
+    # --- Import review history from revlog ---
+    try:
+        cur.execute("SELECT id, cid, ease, ivl, factor FROM revlog ORDER BY id")
+        revlog_rows = cur.fetchall()
+        for rev_ts, anki_cid, ease, ivl, factor in revlog_rows:
+            our_card_id = anki_cid_map.get(anki_cid)
+            if not our_card_id:
+                continue
+            review_date = datetime.fromtimestamp(rev_ts / 1000).strftime('%Y-%m-%d')
+            rating = _EASE_TO_RATING.get(ease, ease)
+            interval_after = ivl if ivl > 0 else 0
+            ease_after = round(factor / 1000.0, 4) if factor else 2.5
+            database.import_review(our_card_id, review_date, rating, interval_after, ease_after)
+    except Exception as ex:
+        print(f"[anki_importer] revlog import error: {ex}")
 
     con.close()
     return deck_id_mapping

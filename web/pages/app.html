@@ -211,8 +211,10 @@
             });
         }
 
-        function renderTemplate(template, fields) {
+        function renderTemplate(template, fields, frontHtml) {
             var result = template;
+            // {{FrontSide}} — Anki special token: re-render the already-rendered front HTML
+            result = result.replace(/\{\{FrontSide\}\}/gi, frontHtml || '');
             // Conditional blocks: {{#Field}}...{{/Field}}
             result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
                 key = key.trim();
@@ -234,6 +236,19 @@
                 return value;
             });
             return result;
+        }
+
+        // Set innerHTML and re-execute any <script> tags, which browsers suppress on innerHTML injection.
+        function setInnerHTMLWithScripts(element, html) {
+            element.innerHTML = html;
+            Array.from(element.querySelectorAll('script')).forEach(function(oldScript) {
+                var newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(function(attr) {
+                    newScript.setAttribute(attr.name, attr.value);
+                });
+                newScript.textContent = oldScript.textContent;
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
         }
 
         function playAudioSequentially(container) {
@@ -286,11 +301,11 @@
             document.getElementById('review-card-css').textContent = currentCard.css_style || '';
             var frontEl = document.getElementById('review-front-text');
             if (currentCard.front_style) {
-                frontEl.innerHTML = resolveMedia(renderTemplate(currentCard.front_style, currentCard.fields || {}));
+                setInnerHTMLWithScripts(frontEl, resolveMedia(renderTemplate(currentCard.front_style, currentCard.fields || {})));
             } else {
                 var ft = currentCard.front || '';
                 if (ft.indexOf('[image:') !== -1 || ft.indexOf('[sound:') !== -1) {
-                    frontEl.innerHTML = resolveMedia(ft);
+                    setInnerHTMLWithScripts(frontEl, resolveMedia(ft));
                 } else {
                     frontEl.textContent = ft;
                 }
@@ -304,11 +319,12 @@
         function revealAnswer() {
             var backEl = document.getElementById('review-back-text');
             if (currentCard.back_style) {
-                backEl.innerHTML = resolveMedia(renderTemplate(currentCard.back_style, currentCard.fields || {}));
+                var frontHtml = document.getElementById('review-front-text').innerHTML;
+                setInnerHTMLWithScripts(backEl, resolveMedia(renderTemplate(currentCard.back_style, currentCard.fields || {}, frontHtml)));
             } else {
                 var bt = currentCard.back || '';
                 if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
-                    backEl.innerHTML = resolveMedia(bt);
+                    setInnerHTMLWithScripts(backEl, resolveMedia(bt));
                 } else {
                     backEl.textContent = bt;
                 }

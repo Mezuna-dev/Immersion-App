@@ -298,15 +298,20 @@ def delete_card_type(card_type_id: int):
 # --- Card Functions --------------------------------
 
 def create_card(deck_id: int, front: str, back: str,
-                card_type_id: int = None, fields_json: str = None) -> int:
+                card_type_id: int = None, fields_json: str = None,
+                reps: int = 0, ease_factor: float = 2.5, interval: int = 0,
+                due_date: str = None, is_new: bool = True,
+                last_reviewed: str = None) -> int:
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     cur.execute("""
-        INSERT INTO Card (Deck_ID, Card_Front, Card_Back, Card_Type_ID, Fields, Date_Created)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (deck_id, front, back, card_type_id, fields_json, creation_date))
+        INSERT INTO Card (Deck_ID, Card_Front, Card_Back, Card_Type_ID, Fields, Date_Created,
+                          Reps, Ease_Factor, Interval, Due_Date, Is_New, Last_Reviewed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (deck_id, front, back, card_type_id, fields_json, creation_date,
+          reps, ease_factor, interval, due_date, int(is_new), last_reviewed))
 
     con.commit()
     new_card_id = cur.lastrowid
@@ -489,6 +494,20 @@ def get_new_cards_introduced_today(deck_id=None):
 
 def create_review(card_id, rating, interval_after, ease_factor_after):
     review_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+
+    cur.execute("""
+        INSERT INTO Review (Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After)
+        VALUES (?, ?, ?, ?, ?)
+    """, (card_id, review_date, rating, interval_after, ease_factor_after))
+
+    con.commit()
+    con.close()
+
+
+def import_review(card_id, review_date: str, rating, interval_after, ease_factor_after):
+    """Insert a historical review record with an explicit date (used during deck import)."""
     con = create_db_connection()
     cur = con.cursor()
 
