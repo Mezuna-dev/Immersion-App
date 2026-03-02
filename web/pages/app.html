@@ -7,6 +7,7 @@
     <link href="../styles/bootstrap/css/bootstrap.css" rel="stylesheet">
     <link href="../styles/custom/dashboard.css" rel="stylesheet">
     <script src="../styles/bootstrap/js/bootstrap.bundle.js"></script>
+    <script src="../styles/plotly.min.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
     <title>Immersion App</title>
@@ -132,25 +133,59 @@
         function showDeckDetails(deck) {
             currentDeckForDetails = deck;
             var deckDetailsView = document.getElementById('deck-details-view');
+            var remainingNew = Math.max(0, deck.total - deck.young - deck.mature);
             deckDetailsView.innerHTML = `
                 <input type="hidden" id="current-deck-id" value="${deck.id}">
-                <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">${deck.name}</h1>
-                <a href="#" class="btn btn-dark" onclick="showDeckSettings()" style="margin-left: 2rem; margin-top: .5rem; background-color: #9067C6; animation: fadeIn 0.6s ease;">Settings</a>
-                <p style="animation: fadeIn 0.6s ease;">Total Cards: ${deck.total}</p>
-                <p style="animation: fadeIn 0.6s ease;">Due Cards: ${deck.due}</p>
-                <p style="animation: fadeIn 0.6s ease;">New Cards: ${deck.new}</p>
-                <div class="card mb-4" style="background-color: #9067C6; width: 50%;">
-                    <div class="card-body text-white">
-                        <h5 class="card-title">Description</h5>
-                        <p class="card-text">${deck.description || 'No description provided.'}</p>
+                <h1 class="mb-3" style="animation: fadeIn 0.6s ease;">${deck.name}</h1>
+                <div style="display: flex; align-items: flex-start; gap: 6rem; flex-wrap: wrap;">
+                    <div style="flex: 0 0 auto;">
+                        <a href="#" class="btn btn-dark" onclick="showDeckSettings()" style="margin-bottom: 1.25rem; background-color: #9067C6; animation: fadeIn 0.6s ease; display: inline-block;">Settings</a>
+                        <p style="animation: fadeIn 0.6s ease;">Total Cards: ${deck.total}</p>
+                        <p style="animation: fadeIn 0.6s ease;">Due Cards: ${deck.due}</p>
+                        <p style="animation: fadeIn 0.6s ease;">New Cards: ${deck.new}</p>
+                        <p style="animation: fadeIn 0.6s ease;">Young Cards: ${deck.young}</p>
+                        <p style="animation: fadeIn 0.6s ease;">Mature Cards: ${deck.mature}</p>
+                        <div class="card mb-4" style="background-color: #9067C6; width: 18rem;">
+                            <div class="card-body text-white">
+                                <h5 class="card-title">Description</h5>
+                                <p class="card-text">${deck.description || 'No description provided.'}</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-dark" onclick="startReview(${deck.id})" style="margin-top: 1rem; background-color: #9067C6;">Start Review</button>
+                        <button class="btn btn-dark" onclick="showCreateCard(${deck.id})" style="margin-top: 1rem; background-color: #9067C6;">Add New Card</button>
+                        <button class="btn btn-dark" onclick="showView('srs')" style="margin-top: 1rem; background-color: #9067C6;">Back to Decks</button>
                     </div>
+                    <div id="deck-pie-chart" style="flex: 0 0 420px; align-self: center; margin-left: 2rem;"></div>
                 </div>
-                <button class="btn btn-dark" onclick="startReview(${deck.id})" style="margin-top: 1rem; background-color: #9067C6;">Start Review</button>
-                <button class="btn btn-dark" onclick="showCreateCard(${deck.id})" style="margin-top: 1rem; background-color: #9067C6;">Add New Card</button>
-                <button class="btn btn-dark" onclick="showView('srs')" style="margin-top: 1rem; background-color: #9067C6;">Back to Decks</button>
             `;
-            showView('deck-details')
-            ;
+            showView('deck-details');
+            if (deck.total > 0 && typeof Plotly !== 'undefined') {
+                var sliceValues  = [deck.young,   deck.mature,  remainingNew];
+                var sliceLabels  = ['Young',       'Mature',     'New'];
+                var sliceColors  = ['#9067C6',     '#27ae60',    '#4a90d9'];
+                var fVals = [], fLabels = [], fColors = [];
+                sliceValues.forEach(function(v, i) {
+                    if (v > 0) { fVals.push(v); fLabels.push(sliceLabels[i]); fColors.push(sliceColors[i]); }
+                });
+                Plotly.newPlot('deck-pie-chart', [{
+                    values: fVals,
+                    labels: fLabels,
+                    type: 'pie',
+                    hole: 0.45,
+                    marker: { colors: fColors, line: { color: '#242038', width: 2 } },
+                    textinfo: 'label+percent',
+                    textfont: { color: 'white', size: 13 },
+                    hovertemplate: '%{label}: %{value} cards (%{percent})<extra></extra>'
+                }], {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor:  'transparent',
+                    showlegend: true,
+                    legend: { font: { color: 'white', size: 13 }, bgcolor: 'transparent', orientation: 'h', x: 0.5, xanchor: 'center', y: -0.08 },
+                    margin: { t: 10, b: 40, l: 10, r: 10 },
+                    font: { color: 'white' },
+                    hoverlabel: { bgcolor: '#2d2a3e', bordercolor: '#9067C6', font: { color: 'white', size: 13 } }
+                }, { responsive: true, displayModeBar: false });
+            }
         }
 
         var currentDeckForDetails = null;
@@ -161,6 +196,9 @@
             document.getElementById('settings-deck-name').textContent = deck.name;
             document.getElementById('settings-new-cards-limit').value = deck.new_cards_limit !== undefined ? deck.new_cards_limit : 15;
             document.getElementById('settings-learning-steps').value = deck.learning_steps !== undefined ? deck.learning_steps : '1 10';
+            document.getElementById('settings-relearning-steps').value = deck.relearning_steps !== undefined ? deck.relearning_steps : '10';
+            document.getElementById('settings-study-order').value = deck.study_order !== undefined ? deck.study_order : 'new_first';
+            document.getElementById('settings-answer-display').value = deck.answer_display !== undefined ? deck.answer_display : 'replace';
             showView('deck-settings');
         }
 
@@ -169,7 +207,10 @@
             var limit = parseInt(document.getElementById('settings-new-cards-limit').value, 10);
             if (isNaN(limit) || limit < 0) { showAlert('Please enter a valid number.'); return; }
             var learningSteps = document.getElementById('settings-learning-steps').value.trim();
-            bridge.saveDeckSettings(currentDeckForDetails.id, limit, learningSteps);
+            var relearningSteps = document.getElementById('settings-relearning-steps').value.trim();
+            var studyOrder = document.getElementById('settings-study-order').value || 'new_first';
+            var answerDisplay = document.getElementById('settings-answer-display').value || 'replace';
+            bridge.saveDeckSettings(currentDeckForDetails.id, limit, learningSteps, relearningSteps, studyOrder, answerDisplay);
             showView('deck-details');
         }
 
@@ -178,6 +219,7 @@
         var currentCard = null;
         var currentDeckIdForReview = null;
         var currentDeckLearningSteps = [];
+        var currentDeckAnswerDisplay = 'replace';
         var mediaBaseUrl = '';
 
         function startReview(deckId) {
@@ -189,6 +231,7 @@
 
         function updateReviewQueue(data) {
             currentDeckLearningSteps = data.learning_steps || [];
+            currentDeckAnswerDisplay = data.answer_display || 'replace';
             mediaBaseUrl = data.media_base_url || '';
             reviewQueue = data.cards || [];
             currentCardIndex = 0;
@@ -296,8 +339,6 @@
                 return;
             }
             currentCard = reviewQueue[currentCardIndex];
-            document.getElementById('review-progress').textContent =
-                (currentCardIndex + 1) + ' / ' + reviewQueue.length;
             document.getElementById('review-card-css').textContent = currentCard.css_style || '';
             var frontEl = document.getElementById('review-front-text');
             if (currentCard.front_style) {
@@ -317,20 +358,35 @@
         }
 
         function revealAnswer() {
+            var frontEl = document.getElementById('review-front-text');
             var backEl = document.getElementById('review-back-text');
-            if (currentCard.back_style) {
-                var frontHtml = document.getElementById('review-front-text').innerHTML;
-                setInnerHTMLWithScripts(backEl, resolveMedia(renderTemplate(currentCard.back_style, currentCard.fields || {}, frontHtml)));
-            } else {
-                var bt = currentCard.back || '';
-                if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
-                    setInnerHTMLWithScripts(backEl, resolveMedia(bt));
+            var frontHtml = frontEl.innerHTML;
+            if (currentDeckAnswerDisplay === 'replace') {
+                if (currentCard.back_style) {
+                    setInnerHTMLWithScripts(frontEl, resolveMedia(renderTemplate(currentCard.back_style, currentCard.fields || {}, frontHtml)));
                 } else {
-                    backEl.textContent = bt;
+                    var bt = currentCard.back || '';
+                    if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
+                        setInnerHTMLWithScripts(frontEl, resolveMedia(bt));
+                    } else {
+                        frontEl.textContent = bt;
+                    }
                 }
+                playAudioSequentially(frontEl);
+            } else {
+                if (currentCard.back_style) {
+                    setInnerHTMLWithScripts(backEl, resolveMedia(renderTemplate(currentCard.back_style, currentCard.fields || {}, frontHtml)));
+                } else {
+                    var bt = currentCard.back || '';
+                    if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
+                        setInnerHTMLWithScripts(backEl, resolveMedia(bt));
+                    } else {
+                        backEl.textContent = bt;
+                    }
+                }
+                playAudioSequentially(backEl);
+                document.getElementById('review-back-container').style.display = 'block';
             }
-            playAudioSequentially(backEl);
-            document.getElementById('review-back-container').style.display = 'block';
             document.getElementById('review-rating-buttons').style.display = 'flex';
             document.getElementById('review-show-answer-btn').style.display = 'none';
         }
@@ -687,6 +743,35 @@
                             <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Space-separated minutes. New cards repeat through each step before graduating.</small>
                         </div>
                     </div>
+                    <div class="card mb-4" style="background-color: #9067C6; width: 50%; animation: fadeIn 0.6s ease;">
+                        <div class="card-body text-white">
+                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">Current Cards</h2></div>
+                            <label class="form-label d-block" for="settings-relearning-steps" style="font-size: 1rem;">Relearning steps (minutes)</label>
+                            <input type="text" class="form-control" id="settings-relearning-steps" placeholder="e.g. 10"
+                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 12rem;">
+                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Space-separated minutes. Cards lapsed during review repeat through each step before returning to scheduling.</small>
+                        </div>
+                    </div>
+                    <div class="card mb-4" style="background-color: #9067C6; width: 50%; animation: fadeIn 0.6s ease;">
+                        <div class="card-body text-white">
+                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">Order</h2></div>
+                            <label class="form-label" for="settings-study-order" style="font-size: 1rem;">Card study order</label>
+                            <select class="form-control" id="settings-study-order"
+                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 20rem;">
+                                <option value="new_first">New cards before reviews</option>
+                                <option value="new_last">New cards after reviews</option>
+                                <option value="mix">Mix with reviews</option>
+                            </select>
+                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Controls when new cards appear relative to due reviews during a study session.</small>
+                            <label class="form-label d-block" for="settings-answer-display" style="font-size: 1rem; margin-top: 1.25rem;">Answer display</label>
+                            <select class="form-control" id="settings-answer-display"
+                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 20rem;">
+                                <option value="replace">Replace front with back</option>
+                                <option value="show_below">Show back below front</option>
+                            </select>
+                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Whether the answer replaces the question or appears below it.</small>
+                        </div>
+                    </div>
                     <div class="mt-3">
                         <button class="btn btn-dark" onclick="saveDeckSettings()" style="width: 10rem; height: 3rem; background-color: #9067C6; font-size: large; font-weight: 600;">Save</button>
                         <button class="btn btn-dark" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; margin-left: 1rem; background-color: #9067C6; font-size: large; font-weight: 600;">Cancel</button>
@@ -779,24 +864,25 @@
                 <!-- Review View -->
                 <div id="review-view" class="view-section view-hidden text-white">
                     <style id="review-card-css"></style>
-                    <!-- Card Section -->
-                    <div id="review-card-section" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h1 style="animation: fadeIn 0.6s ease;">Review</h1>
-                            <span id="review-progress" style="font-size: 1.2rem; animation: fadeIn 0.6s ease;"></span>
-                        </div>
-                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-                            <div class="card-body d-flex flex-column justify-content-center align-items-center" style="min-height: 200px;">
-                                <div id="review-front-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
+                    <div id="review-inner" style="display: flex; flex-direction: column; height: calc(100vh - 9rem);">
+                        <!-- Card Section -->
+                        <div id="review-card-section" style="flex: 1; overflow-y: auto; padding-bottom: 1rem;">
+                            <div class="mb-2">
+                                <h1 style="animation: fadeIn 0.6s ease;">Review</h1>
                             </div>
-                            <div id="review-back-container" style="display: none; width: 100%; text-align: center;">
-                                <hr style="border-color: #9067C6; width: 70%; margin: 2rem auto;">
-                                <div class="card-body d-flex flex-column justify-content-center align-items-center" style="min-height: 150px;">
-                                    <div id="review-back-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div class="d-flex flex-column justify-content-center align-items-center">
+                                    <div id="review-front-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
+                                </div>
+                                <div id="review-back-container" style="display: none; width: 100%; text-align: center;">
+                                    <hr style="border-color: #9067C6; width: 70%; margin: 2rem auto;">
+                                    <div class="d-flex flex-column justify-content-center align-items-center">
+                                        <div id="review-back-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div style="display: flex; flex-direction: column; align-items: center; padding-bottom: 2rem; margin-top: 10rem;">
+                        <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0.5rem; border-top: 1px solid #3a3555;">
                             <button id="review-show-answer-btn" class="btn btn-dark" onclick="revealAnswer()" style="background-color: #9067C6; width: 12rem; height: 3rem; font-size: large; font-weight: 600; animation: fadeIn 0.6s ease;">Show Answer</button>
                             <div id="review-rating-buttons" style="display: none; gap: 1rem; flex-wrap: wrap; justify-content: center;">
                                 <button class="btn btn-dark" onclick="rateCard(1)" style="background-color: #c0392b; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Again</button>

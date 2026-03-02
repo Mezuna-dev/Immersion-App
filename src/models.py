@@ -1,14 +1,17 @@
 
 class Deck:
-    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10') -> None:
+    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10', relearning_steps='10', study_order='new_first', answer_display='replace') -> None:
         self.id = id
         self.name = name
         self.date_created = date_created
         self.new_cards_limit = new_cards_limit
         self.description = description
         self.learning_steps = learning_steps or '1 10'
+        self.relearning_steps = relearning_steps or '10'
+        self.study_order = study_order or 'new_first'
+        self.answer_display = answer_display or 'replace'
     def __repr__(self) -> str:
-        return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\nLearning Steps: {self.learning_steps}\n"
+        return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\nLearning Steps: {self.learning_steps}\nRelearning Steps: {self.relearning_steps}\nStudy Order: {self.study_order}\nAnswer Display: {self.answer_display}\n"
     
 class CardType:
     def __init__(self, id, name, fields, date_created, is_default=False, front_style='', back_style='', css_style='') -> None:

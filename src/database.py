@@ -49,7 +49,10 @@ def initialize_database():
                 Date_Created TEXT NOT NULL,
                 New_Cards_Limit INTEGER NOT NULL DEFAULT 15,
                 Description TEXT,
-                Learning_Steps TEXT DEFAULT '1 10'
+                Learning_Steps TEXT DEFAULT '1 10',
+                Relearning_Steps TEXT DEFAULT '10',
+                Study_Order TEXT DEFAULT 'new_first',
+                Answer_Display TEXT DEFAULT 'replace'
                 )
         """)
 
@@ -113,6 +116,9 @@ def migrate_database():
     for stmt in [
         "ALTER TABLE Deck ADD COLUMN Learning_Steps TEXT DEFAULT '1 10'",
         "ALTER TABLE Card ADD COLUMN Learning_Step INTEGER",
+        "ALTER TABLE Deck ADD COLUMN Relearning_Steps TEXT DEFAULT '10'",
+        "ALTER TABLE Deck ADD COLUMN Study_Order TEXT DEFAULT 'new_first'",
+        "ALTER TABLE Deck ADD COLUMN Answer_Display TEXT DEFAULT 'replace'",
     ]:
         try:
             cur.execute(stmt)
@@ -152,11 +158,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display FROM Deck""")
     rows = cur.fetchall()
 
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10')
+        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace')
         decks.append(deck)
 
     con.close()
@@ -167,7 +173,7 @@ def get_deck_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps FROM Deck
+        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display FROM Deck
         WHERE ID=?
     """, (id,))
 
@@ -177,17 +183,17 @@ def get_deck_by_id(id):
         con.close()
         return None
     else:
-        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10')
+        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace')
 
         con.close()
         return deck
 
-def update_deck_settings(deck_id: int, new_cards_limit: int, learning_steps: str = '1 10'):
+def update_deck_settings(deck_id: int, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace'):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        UPDATE Deck SET New_Cards_Limit = ?, Learning_Steps = ? WHERE ID = ?
-    """, (new_cards_limit, learning_steps, deck_id))
+        UPDATE Deck SET New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ? WHERE ID = ?
+    """, (new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, deck_id))
     con.commit()
     con.close()
 
@@ -456,6 +462,42 @@ def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, n
     
     con.commit()
     con.close()
+
+def get_young_card_count(deck_id=None):
+    con = create_db_connection()
+    cur = con.cursor()
+    if deck_id is not None:
+        cur.execute("""
+            SELECT COUNT(*) FROM Card
+            WHERE Is_New = 0 AND Learning_Step IS NULL AND Interval > 0 AND Interval < 21
+            AND Deck_ID = ?
+        """, (deck_id,))
+    else:
+        cur.execute("""
+            SELECT COUNT(*) FROM Card
+            WHERE Is_New = 0 AND Learning_Step IS NULL AND Interval > 0 AND Interval < 21
+        """)
+    count = cur.fetchone()[0]
+    con.close()
+    return count
+
+def get_mature_card_count(deck_id=None):
+    con = create_db_connection()
+    cur = con.cursor()
+    if deck_id is not None:
+        cur.execute("""
+            SELECT COUNT(*) FROM Card
+            WHERE Is_New = 0 AND Learning_Step IS NULL AND Interval >= 21
+            AND Deck_ID = ?
+        """, (deck_id,))
+    else:
+        cur.execute("""
+            SELECT COUNT(*) FROM Card
+            WHERE Is_New = 0 AND Learning_Step IS NULL AND Interval >= 21
+        """)
+    count = cur.fetchone()[0]
+    con.close()
+    return count
 
 # --- Review Functions --------------------------------
 

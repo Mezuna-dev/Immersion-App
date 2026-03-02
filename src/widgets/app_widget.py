@@ -37,15 +37,22 @@ class AppBridge(QObject):
             remaining_new = max(0, deck.new_cards_limit - introduced_today)
             new_count = len(database.get_new_cards(deck_id=deck.id, limit=remaining_new))
             total_count = database.get_cards_by_deck(deck_id=deck.id)
+            young_count = database.get_young_card_count(deck_id=deck.id)
+            mature_count = database.get_mature_card_count(deck_id=deck.id)
             deck_list.append({
                 'id': deck.id,
                 'name': deck.name,
                 'due': due_count,
                 'new': new_count,
                 'total': len(total_count),
+                'young': young_count,
+                'mature': mature_count,
                 'description': deck.description,
                 'new_cards_limit': deck.new_cards_limit,
-                'learning_steps': deck.learning_steps or '1 10'
+                'learning_steps': deck.learning_steps or '1 10',
+                'relearning_steps': deck.relearning_steps or '10',
+                'study_order': deck.study_order or 'new_first',
+                'answer_display': deck.answer_display or 'replace'
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
@@ -111,9 +118,9 @@ class AppBridge(QObject):
         database.create_card(deck_id, front, back, card_type_id, fields_json)
         self.refreshStats()
 
-    @pyqtSlot(int, int, str)
-    def saveDeckSettings(self, deck_id, new_cards_limit, learning_steps_str):
-        database.update_deck_settings(deck_id, new_cards_limit, learning_steps_str)
+    @pyqtSlot(int, int, str, str, str, str)
+    def saveDeckSettings(self, deck_id, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display):
+        database.update_deck_settings(deck_id, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display)
         self.getDecks()
 
     @pyqtSlot(int, int)
@@ -156,13 +163,22 @@ class AppBridge(QObject):
         new_limit = deck.new_cards_limit if deck else 15
         learning_steps_str = deck.learning_steps if deck else '1 10'
         learning_steps = [int(s) for s in learning_steps_str.split() if s.strip().isdigit()]
+        study_order = deck.study_order if deck else 'new_first'
+        answer_display = deck.answer_display if deck else 'replace'
         introduced_today = database.get_new_cards_introduced_today(deck_id=deck_id)
         remaining_new = max(0, new_limit - introduced_today)
         due_cards = database.get_due_cards(deck_id=deck_id)
         new_cards = database.get_new_cards(deck_id=deck_id, limit=remaining_new)
+        if study_order == 'new_first':
+            ordered = new_cards + due_cards
+        elif study_order == 'mix':
+            ordered = [c for pair in zip(due_cards, new_cards) for c in pair]
+            ordered += due_cards[len(new_cards):] + new_cards[len(due_cards):]
+        else:  # new_last
+            ordered = due_cards + new_cards
         card_type_map = {ct.id: ct for ct in database.get_all_card_types()}
         cards = []
-        for card in due_cards + new_cards:
+        for card in ordered:
             ct = card_type_map.get(card.card_type_id)
             try:
                 fields = json.loads(card.fields_json) if card.fields_json else {}
@@ -182,7 +198,7 @@ class AppBridge(QObject):
         media_dir = database.BASE_DIR / 'data' / 'media'
         media_dir.mkdir(parents=True, exist_ok=True)
         media_base_url = QUrl.fromLocalFile(str(media_dir)).toString() + '/'
-        payload = json.dumps({'learning_steps': learning_steps, 'cards': cards, 'media_base_url': media_base_url})
+        payload = json.dumps({'learning_steps': learning_steps, 'cards': cards, 'media_base_url': media_base_url, 'answer_display': answer_display})
         self.web_view.page().runJavaScript(f'updateReviewQueue({payload});')
 
     @pyqtSlot(int, int)
