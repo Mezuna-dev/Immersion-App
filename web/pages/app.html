@@ -862,9 +862,8 @@
                 </div>
 
                 <!-- Review View -->
-                <div id="review-view" class="view-section view-hidden text-white">
-                    <style id="review-card-css"></style>
-                    <div id="review-inner" style="display: flex; flex-direction: column; height: calc(100vh - 9rem);">
+                <div id="review-view" class="view-section view-hidden text-white" style="margin-bottom: -3rem;">                    <style id="review-card-css"></style>
+                    <div id="review-inner" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
                         <!-- Card Section -->
                         <div id="review-card-section" style="flex: 1; overflow-y: auto; padding-bottom: 1rem;">
                             <div class="mb-2">
@@ -882,7 +881,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0.5rem; border-top: 1px solid #3a3555;">
+                        <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0; border-top: 1px solid #3a3555;">
                             <button id="review-show-answer-btn" class="btn btn-dark" onclick="revealAnswer()" style="background-color: #9067C6; width: 12rem; height: 3rem; font-size: large; font-weight: 600; animation: fadeIn 0.6s ease;">Show Answer</button>
                             <div id="review-rating-buttons" style="display: none; gap: 1rem; flex-wrap: wrap; justify-content: center;">
                                 <button class="btn btn-dark" onclick="rateCard(1)" style="background-color: #c0392b; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Again</button>
