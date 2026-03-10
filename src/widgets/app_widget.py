@@ -163,6 +163,8 @@ class AppBridge(QObject):
         new_limit = deck.new_cards_limit if deck else 15
         learning_steps_str = deck.learning_steps if deck else '1 10'
         learning_steps = [int(s) for s in learning_steps_str.split() if s.strip().isdigit()]
+        relearning_steps_str = deck.relearning_steps if deck else '10'
+        relearning_steps = [int(s) for s in relearning_steps_str.split() if s.strip().isdigit()]
         study_order = deck.study_order if deck else 'new_first'
         answer_display = deck.answer_display if deck else 'replace'
         introduced_today = database.get_new_cards_introduced_today(deck_id=deck_id)
@@ -193,12 +195,13 @@ class AppBridge(QObject):
                 'back_style': ct.back_style if ct else '',
                 'css_style': ct.css_style if ct else '',
                 'is_new': bool(card.is_new),
+                'is_relearning': not bool(card.is_new) and card.learning_step is not None,
                 'learning_step': card.learning_step,
             })
         media_dir = database.BASE_DIR / 'data' / 'media'
         media_dir.mkdir(parents=True, exist_ok=True)
         media_base_url = QUrl.fromLocalFile(str(media_dir)).toString() + '/'
-        payload = json.dumps({'learning_steps': learning_steps, 'cards': cards, 'media_base_url': media_base_url, 'answer_display': answer_display})
+        payload = json.dumps({'learning_steps': learning_steps, 'relearning_steps': relearning_steps, 'cards': cards, 'media_base_url': media_base_url, 'answer_display': answer_display})
         self.web_view.page().runJavaScript(f'updateReviewQueue({payload});')
 
     @pyqtSlot(int, int)
