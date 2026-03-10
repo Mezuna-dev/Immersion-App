@@ -215,8 +215,10 @@
         }
 
         var reviewQueue = [];
+        var learningQueue = []; // [{card, showAfter (ms timestamp)}] — time-gated cards waiting to return
         var currentCardIndex = 0;
         var currentCard = null;
+        var currentCardFromLearning = false;
         var currentDeckIdForReview = null;
         var currentDeckLearningSteps = [];
         var currentDeckRelearnSteps = [];
@@ -236,7 +238,9 @@
             currentDeckAnswerDisplay = data.answer_display || 'replace';
             mediaBaseUrl = data.media_base_url || '';
             reviewQueue = data.cards || [];
+            learningQueue = [];
             currentCardIndex = 0;
+            currentCardFromLearning = false;
             document.getElementById('review-card-section').style.display = 'block';
             document.getElementById('review-action-bar').style.display = 'flex';
             document.getElementById('review-complete-section').style.display = 'none';
@@ -337,11 +341,36 @@
         }
 
         function showNextCard() {
-            if (currentCardIndex >= reviewQueue.length) {
+            var now = Date.now();
+            var hasRegular = currentCardIndex < reviewQueue.length;
+
+            if (!hasRegular && learningQueue.length === 0) {
                 showReviewComplete();
                 return;
             }
-            currentCard = reviewQueue[currentCardIndex];
+
+            // Find learning cards whose timer has elapsed
+            var overdue = learningQueue.filter(function(item) { return item.showAfter <= now; });
+            overdue.sort(function(a, b) { return a.showAfter - b.showAfter; });
+
+            if (!hasRegular) {
+                // All regular cards done — show the earliest pending learning card (timer may not be up yet)
+                learningQueue.sort(function(a, b) { return a.showAfter - b.showAfter; });
+                var item = learningQueue.shift();
+                currentCard = item.card;
+                currentCardFromLearning = true;
+            } else if (overdue.length > 0) {
+                // A learning card's timer has elapsed — interleave it now (mirrors Anki behaviour)
+                var item = overdue[0];
+                learningQueue = learningQueue.filter(function(i) { return i !== item; });
+                currentCard = item.card;
+                currentCardFromLearning = true;
+            } else {
+                // Timer hasn't fired for any learning card — show next regular card
+                currentCard = reviewQueue[currentCardIndex];
+                currentCardFromLearning = false;
+            }
+
             document.getElementById('review-card-css').textContent = currentCard.css_style || '';
             var frontEl = document.getElementById('review-front-text');
             if (currentCard.front_style) {
@@ -416,16 +445,14 @@
                 if (newStep >= steps.length) {
                     // Graduate: run through SM-2
                     bridge.submitRating(currentCard.id, rating);
-                    currentCardIndex++;
                 } else {
-                    // Advance learning step, requeue card
+                    // Schedule card to return after the step's real-time delay
                     bridge.updateCardLearningStep(currentCard.id, newStep);
                     var requeueCard = Object.assign({}, currentCard, { learning_step: newStep });
-                    var insertAt = Math.min(currentCardIndex + 1 + Math.min(newStep + 1, 3), reviewQueue.length);
-                    reviewQueue.splice(insertAt, 0, requeueCard);
-                    currentCardIndex++;
+                    learningQueue.push({ card: requeueCard, showAfter: Date.now() + steps[newStep] * 60 * 1000 });
                 }
             } else if (currentCard.is_relearning && currentDeckRelearnSteps.length > 0) {
+                var relearnSteps = currentDeckRelearnSteps;
                 var curStep = (currentCard.learning_step !== null && currentCard.learning_step !== undefined)
                     ? currentCard.learning_step : 0;
                 var newStep;
@@ -437,30 +464,29 @@
                 } else if (rating === 4) {  // Good → advance
                     newStep = curStep + 1;
                 } else {                    // Easy → graduate immediately
-                    newStep = currentDeckRelearnSteps.length;
+                    newStep = relearnSteps.length;
                 }
 
-                if (newStep >= currentDeckRelearnSteps.length) {
+                if (newStep >= relearnSteps.length) {
                     // Graduated from relearning
                     bridge.submitRating(currentCard.id, rating);
-                    currentCardIndex++;
                 } else {
-                    // Continue relearning
+                    // Schedule card to return after the relearn step's real-time delay
                     bridge.updateCardLearningStep(currentCard.id, newStep);
                     var requeueCard = Object.assign({}, currentCard, { learning_step: newStep, is_relearning: true });
-                    var insertAt = Math.min(currentCardIndex + 1 + Math.min(newStep + 1, 3), reviewQueue.length);
-                    reviewQueue.splice(insertAt, 0, requeueCard);
-                    currentCardIndex++;
+                    learningQueue.push({ card: requeueCard, showAfter: Date.now() + relearnSteps[newStep] * 60 * 1000 });
                 }
             } else if (!currentCard.is_new && rating === 1 && currentDeckRelearnSteps.length > 0) {
                 // Card lapsed — start relearning steps
                 bridge.updateCardLearningStep(currentCard.id, 0);
                 var requeueCard = Object.assign({}, currentCard, { learning_step: 0, is_relearning: true });
-                var insertAt = Math.min(currentCardIndex + 2, reviewQueue.length);
-                reviewQueue.splice(insertAt, 0, requeueCard);
-                currentCardIndex++;
+                learningQueue.push({ card: requeueCard, showAfter: Date.now() + currentDeckRelearnSteps[0] * 60 * 1000 });
             } else {
                 bridge.submitRating(currentCard.id, rating);
+            }
+
+            // Advance the regular-queue pointer only when the card being rated came from there
+            if (!currentCardFromLearning) {
                 currentCardIndex++;
             }
 
