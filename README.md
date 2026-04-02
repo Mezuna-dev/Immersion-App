@@ -72,7 +72,6 @@ Immersion-App/
 │   ├── scheduler.py        # SM2 spaced repetition algorithm
 │   ├── anki_importer.py    # .apkg import logic (old & new Anki formats)
 │   ├── models.py           # Data models (Deck, Card, CardType)
-│   ├── cli.py              # CLI utilities
 │   └── widgets/
 │       └── app_widget.py   # PyQt6 widget hosting the web frontend
 ├── web/
