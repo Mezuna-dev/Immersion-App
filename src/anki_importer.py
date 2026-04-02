@@ -586,13 +586,21 @@ def import_anki_deck(apkg_path):
     # --- Import decks ---
     deck_id_mapping = {}  # anki_deck_id -> our deck_id
 
+    s = database.get_app_settings()
+    deck_kwargs = dict(
+        new_cards_limit=s.get('default_new_cards_limit', 15),
+        learning_steps=s.get('default_learning_steps', '1 10'),
+        relearning_steps=s.get('default_relearning_steps', '10'),
+        study_order=s.get('default_study_order', 'new_first'),
+    )
+
     cur.execute("PRAGMA table_info(decks)")
     has_decks_table = len(cur.fetchall()) > 0
 
     if has_decks_table:
         cur.execute("SELECT id, name FROM decks WHERE id != 1")
         for deck_id, deck_name in cur.fetchall():
-            deck_id_mapping[deck_id] = database.create_deck(deck_name)
+            deck_id_mapping[deck_id] = database.create_deck(deck_name, **deck_kwargs)
     else:
         try:
             cur.execute("SELECT decks FROM col")
@@ -601,7 +609,7 @@ def import_anki_deck(apkg_path):
                 for deck_data in json.loads(row[0]).values():
                     anki_did = deck_data.get("id")
                     if anki_did and anki_did != 1:
-                        deck_id_mapping[anki_did] = database.create_deck(deck_data["name"])
+                        deck_id_mapping[anki_did] = database.create_deck(deck_data["name"], **deck_kwargs)
         except Exception:
             pass
 

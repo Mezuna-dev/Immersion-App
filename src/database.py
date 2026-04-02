@@ -11,6 +11,33 @@ import models
 BASE_DIR = Path(__file__).resolve().parent.parent
 Path(f"{BASE_DIR}/data").mkdir(parents=True, exist_ok=True)
 DB_PATH = BASE_DIR / 'data' / 'app.db'
+SETTINGS_PATH = BASE_DIR / 'data' / 'settings.json'
+
+DEFAULT_SETTINGS = {
+    'accent_color': '#9067C6',
+    'font_size': 'medium',
+    'default_new_cards_limit': 15,
+    'default_learning_steps': '1 10',
+    'default_relearning_steps': '10',
+    'default_study_order': 'new_first',
+    'review_autoplay_audio': True,
+    'review_shortcut_enabled': True,
+    'review_shortcut_key': 'Space',
+}
+
+def get_app_settings() -> dict:
+    if SETTINGS_PATH.exists():
+        try:
+            with open(SETTINGS_PATH, 'r') as f:
+                data = json.load(f)
+            return {**DEFAULT_SETTINGS, **data}
+        except Exception:
+            pass
+    return dict(DEFAULT_SETTINGS)
+
+def save_app_settings(settings: dict):
+    with open(SETTINGS_PATH, 'w') as f:
+        json.dump(settings, f, indent=2)
 
 def create_db_connection():
     con = sqlite3.connect(DB_PATH)
@@ -135,15 +162,19 @@ def migrate_database():
 
 # --- Deck Functions --------------------------------
 
-def create_deck(name: str, description: str = ""):
+def create_deck(name: str, description: str = "", new_cards_limit: int = 15,
+                learning_steps: str = '1 10', relearning_steps: str = '10',
+                study_order: str = 'new_first'):
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     cur.execute("""
-        INSERT INTO Deck (Name, Date_Created, Description)
-        VALUES (?, ?, ?)
-    """, (name, creation_date, description))
+        INSERT INTO Deck (Name, Date_Created, Description, New_Cards_Limit,
+                          Learning_Steps, Relearning_Steps, Study_Order)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (name, creation_date, description, new_cards_limit,
+          learning_steps, relearning_steps, study_order))
 
     con.commit()
     new_deck_id = cur.lastrowid
@@ -188,12 +219,12 @@ def get_deck_by_id(id):
         con.close()
         return deck
 
-def update_deck_settings(deck_id: int, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace'):
+def update_deck_settings(deck_id: int, name: str, description: str, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace'):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        UPDATE Deck SET New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ? WHERE ID = ?
-    """, (new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, deck_id))
+        UPDATE Deck SET Name = ?, Description = ?, New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ? WHERE ID = ?
+    """, (name, description, new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, deck_id))
     con.commit()
     con.close()
 
@@ -201,10 +232,9 @@ def delete_deck(deck_id):
     con = create_db_connection()
     cur = con.cursor()
 
-    cur.execute("""
-        DELETE FROM Deck
-        WHERE ID=?
-    """, (deck_id,))
+    cur.execute("DELETE FROM Review WHERE Card_ID IN (SELECT ID FROM Card WHERE Deck_ID=?)", (deck_id,))
+    cur.execute("DELETE FROM Card WHERE Deck_ID=?", (deck_id,))
+    cur.execute("DELETE FROM Deck WHERE ID=?", (deck_id,))
 
     con.commit()
     con.close()
@@ -558,5 +588,159 @@ def import_review(card_id, review_date: str, rating, interval_after, ease_factor
         VALUES (?, ?, ?, ?, ?)
     """, (card_id, review_date, rating, interval_after, ease_factor_after))
 
+    con.commit()
+    con.close()
+
+
+def get_data_info() -> dict:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM Deck")
+    deck_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM Card")
+    card_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM Review")
+    review_count = cur.fetchone()[0]
+    con.close()
+    db_size = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    return {
+        'db_path': str(DB_PATH),
+        'db_size_bytes': db_size,
+        'deck_count': deck_count,
+        'card_count': card_count,
+        'review_count': review_count,
+    }
+
+
+def export_all_data() -> dict:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display FROM Deck")
+    decks = [{'id': r[0], 'name': r[1], 'date_created': r[2], 'new_cards_limit': r[3], 'description': r[4],
+               'learning_steps': r[5], 'relearning_steps': r[6], 'study_order': r[7], 'answer_display': r[8]}
+             for r in cur.fetchall()]
+    cur.execute("SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card")
+    cards = [{'id': r[0], 'deck_id': r[1], 'front': r[2], 'back': r[3], 'reps': r[4], 'ease_factor': r[5],
+               'interval': r[6], 'due_date': r[7], 'is_new': r[8], 'date_created': r[9], 'last_reviewed': r[10],
+               'card_type_id': r[11], 'fields': r[12], 'learning_step': r[13]}
+             for r in cur.fetchall()]
+    cur.execute("SELECT ID, Name, Fields, Date_Created, Is_Default, Front_Style, Back_Style, CSS_Style FROM CardType")
+    card_types = [{'id': r[0], 'name': r[1], 'fields': r[2], 'date_created': r[3], 'is_default': r[4],
+                   'front_style': r[5], 'back_style': r[6], 'css_style': r[7]}
+                  for r in cur.fetchall()]
+    cur.execute("SELECT ID, Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After FROM Review")
+    reviews = [{'id': r[0], 'card_id': r[1], 'review_date': r[2], 'rating': r[3],
+                'interval_after': r[4], 'ease_factor_after': r[5]}
+               for r in cur.fetchall()]
+    con.close()
+    return {'decks': decks, 'cards': cards, 'card_types': card_types, 'reviews': reviews}
+
+
+def get_daily_review_counts(deck_id=None) -> dict:
+    from datetime import date, timedelta
+    today = date.today()
+    start = today - timedelta(days=364)
+
+    con = create_db_connection()
+    cur = con.cursor()
+
+    if deck_id is not None:
+        cur.execute("""
+            SELECT r.Review_Date, COUNT(*)
+            FROM Review r
+            JOIN Card c ON r.Card_ID = c.ID
+            WHERE c.Deck_ID = ? AND r.Review_Date >= ? AND r.Review_Date <= ?
+            GROUP BY r.Review_Date
+        """, (deck_id, start.isoformat(), today.isoformat()))
+    else:
+        cur.execute("""
+            SELECT Review_Date, COUNT(*)
+            FROM Review
+            WHERE Review_Date >= ? AND Review_Date <= ?
+            GROUP BY Review_Date
+        """, (start.isoformat(), today.isoformat()))
+
+    counts = {row[0]: row[1] for row in cur.fetchall()}
+    con.close()
+
+    # Current streak: consecutive days ending today (or yesterday if no reviews today)
+    current_streak = 0
+    d = today if counts.get(today.isoformat(), 0) > 0 else today - timedelta(days=1)
+    while counts.get(d.isoformat(), 0) > 0:
+        current_streak += 1
+        d -= timedelta(days=1)
+
+    # Longest streak over the full year window
+    longest_streak, run = 0, 0
+    for i in range(365):
+        if counts.get((start + timedelta(days=i)).isoformat(), 0) > 0:
+            run += 1
+            longest_streak = max(longest_streak, run)
+        else:
+            run = 0
+
+    return {
+        'counts': counts,
+        'current_streak': current_streak,
+        'longest_streak': longest_streak,
+        'year_total': sum(counts.values()),
+    }
+
+
+def get_retention_stats(deck_id=None, start_date=None, end_date=None) -> dict:
+    con = create_db_connection()
+    cur = con.cursor()
+
+    deck_filter = 'AND c.Deck_ID = ?' if deck_id is not None else ''
+    params = [deck_id] if deck_id is not None else []
+    params += [start_date, end_date]
+
+    cur.execute(f"""
+        WITH all_reviews AS (
+            SELECT
+                r.ID,
+                r.Card_ID,
+                r.Review_Date,
+                r.Rating,
+                ROW_NUMBER() OVER (PARTITION BY r.Card_ID, r.Review_Date ORDER BY r.ID) AS day_rn,
+                LAG(r.Interval_After, 1, 0) OVER (PARTITION BY r.Card_ID ORDER BY r.ID) AS interval_before
+            FROM Review r
+            JOIN Card c ON r.Card_ID = c.ID
+            WHERE 1=1 {deck_filter}
+        ),
+        filtered AS (
+            SELECT * FROM all_reviews WHERE day_rn = 1 AND Review_Date >= ? AND Review_Date <= ?
+        )
+        SELECT
+            SUM(CASE WHEN interval_before > 0 AND interval_before < 21 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN interval_before > 0 AND interval_before < 21 AND Rating >= 3 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN interval_before >= 21 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN interval_before >= 21 AND Rating >= 3 THEN 1 ELSE 0 END),
+            COUNT(*),
+            SUM(CASE WHEN Rating >= 3 THEN 1 ELSE 0 END)
+        FROM filtered
+    """, params)
+
+    row = cur.fetchone()
+    con.close()
+
+    if not row or not row[4]:
+        empty = {'total': 0, 'successful': 0, 'rate': None}
+        return {'young': empty, 'mature': empty, 'total': empty}
+
+    young_t, young_s = row[0] or 0, row[1] or 0
+    mature_t, mature_s = row[2] or 0, row[3] or 0
+    all_t, all_s = row[4] or 0, row[5] or 0
+
+    def stat(t, s):
+        return {'total': t, 'successful': s, 'rate': round(s / t * 100, 1) if t > 0 else None}
+
+    return {'young': stat(young_t, young_s), 'mature': stat(mature_t, mature_s), 'total': stat(all_t, all_s)}
+
+
+def clear_review_history():
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM Review")
     con.commit()
     con.close()

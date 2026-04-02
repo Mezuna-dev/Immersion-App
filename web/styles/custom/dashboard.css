@@ -5,6 +5,11 @@
     font-style: normal;
 }
 
+:root {
+    --accent: #9067C6;
+    --review-font-size: 2.5rem;
+}
+
 html, body {
     background-color: #242038;
     margin: 0;
@@ -47,7 +52,15 @@ html, body {
 }
 
 .sidebar-color {
-    background-color: #9067C6;
+    background-color: var(--accent);
+}
+
+.btn-accent {
+    background-color: var(--accent) !important;
+}
+
+#review-front-text, #review-back-text {
+    font-size: var(--review-font-size) !important;
 }
 
 .btn-dark {
@@ -165,7 +178,7 @@ body {
     font-family: 'Inter', sans-serif;
     font-weight: 700;
     font-size: 2.5rem;
-    border-bottom: 3px solid #9067C6;
+    border-bottom: 3px solid var(--accent);
     padding-bottom: 1rem;
     display: inline-block;
     animation: fadeIn 0.5s ease;
@@ -207,3 +220,63 @@ body {
 .dashboard-buttons:nth-child(3) { animation: fadeIn 0.5s ease; animation-delay: 0.3s; opacity: 0; animation-fill-mode: forwards; }
 .dashboard-buttons:nth-child(4) { animation: fadeIn 0.5s ease; animation-delay: 0.4s; opacity: 0; animation-fill-mode: forwards; }
 .dashboard-buttons:nth-child(5) { animation: fadeIn 0.5s ease; animation-delay: 0.5s; opacity: 0; animation-fill-mode: forwards; }
+
+/* === Dashboard cards === */
+.dash-card {
+    background-color: #2d2a3e !important;
+    border: none !important;
+    border-top: 3px solid var(--accent) !important;
+    border-radius: 10px;
+}
+
+.dash-stat-cell {
+    padding: 0.6rem 1.25rem;
+    border-right: 1px solid #3d3a50;
+}
+
+.dash-stat-cell:last-child {
+    border-right: none;
+}
+
+.dash-stat-label {
+    font-size: 0.68rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 0.2rem;
+}
+
+.dash-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #fff;
+}
+
+.dash-stat-sub {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 0.1rem;
+}
+
+.dash-section-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #bbb;
+}
+
+.dash-select {
+    background-color: #1e1b2e !important;
+    color: white !important;
+    border-color: #4a4060 !important;
+    width: auto;
+}
+
+.dash-select:focus {
+    background-color: #1e1b2e !important;
+    color: white !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 0.15rem rgba(144, 103, 198, 0.25) !important;
+}

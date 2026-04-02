@@ -66,7 +66,14 @@ class AppBridge(QObject):
     @pyqtSlot(str, str)
     def createDeck(self, deck_name, deck_description):
         if deck_name:
-            database.create_deck(deck_name, deck_description)
+            s = database.get_app_settings()
+            database.create_deck(
+                deck_name, deck_description,
+                new_cards_limit=s.get('default_new_cards_limit', 15),
+                learning_steps=s.get('default_learning_steps', '1 10'),
+                relearning_steps=s.get('default_relearning_steps', '10'),
+                study_order=s.get('default_study_order', 'new_first'),
+            )
             self.refreshStats()
     
     @pyqtSlot()
@@ -118,9 +125,83 @@ class AppBridge(QObject):
         database.create_card(deck_id, front, back, card_type_id, fields_json)
         self.refreshStats()
 
-    @pyqtSlot(int, int, str, str, str, str)
-    def saveDeckSettings(self, deck_id, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display):
-        database.update_deck_settings(deck_id, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display)
+    @pyqtSlot(str)
+    def getDailyReviewCounts(self, deck_id_str):
+        deck_id = int(deck_id_str) if deck_id_str and deck_id_str != '0' else None
+        data = database.get_daily_review_counts(deck_id=deck_id)
+        self.web_view.page().runJavaScript(f'updateHeatmap({json.dumps(data)});')
+
+    @pyqtSlot(str, str)
+    def getRetentionStats(self, deck_id_str, period):
+        from datetime import date, timedelta
+        today = date.today()
+        if period == 'today':
+            start = end = today.strftime('%Y-%m-%d')
+        elif period == 'yesterday':
+            d = today - timedelta(days=1)
+            start = end = d.strftime('%Y-%m-%d')
+        elif period == 'last_week':
+            start = (today - timedelta(days=6)).strftime('%Y-%m-%d')
+            end = today.strftime('%Y-%m-%d')
+        elif period == 'last_month':
+            start = (today - timedelta(days=29)).strftime('%Y-%m-%d')
+            end = today.strftime('%Y-%m-%d')
+        elif period == 'last_year':
+            start = (today - timedelta(days=364)).strftime('%Y-%m-%d')
+            end = today.strftime('%Y-%m-%d')
+        else:
+            start = end = today.strftime('%Y-%m-%d')
+        deck_id = int(deck_id_str) if deck_id_str and deck_id_str != '0' else None
+        stats = database.get_retention_stats(deck_id=deck_id, start_date=start, end_date=end)
+        self.web_view.page().runJavaScript(f'updateRetentionStats({json.dumps(stats)});')
+
+    @pyqtSlot()
+    def getDataInfo(self):
+        info = database.get_data_info()
+        self.web_view.page().runJavaScript(f'updateDataInfo({json.dumps(info)});')
+
+    @pyqtSlot()
+    def exportData(self):
+        data = database.export_all_data()
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.web_view.window(), "Export Data", "immersion_backup.json", "JSON Files (*.json)"
+        )
+        if file_path:
+            import pathlib
+            pathlib.Path(file_path).write_text(
+                json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8'
+            )
+            self.web_view.page().runJavaScript('showAlert("Data exported successfully.");')
+
+    @pyqtSlot()
+    def openDataFolder(self):
+        import subprocess
+        subprocess.Popen(['xdg-open', str(database.BASE_DIR / 'data')])
+
+    @pyqtSlot()
+    def clearReviewHistory(self):
+        database.clear_review_history()
+        self.getDataInfo()
+
+    @pyqtSlot()
+    def getAppSettings(self):
+        settings = database.get_app_settings()
+        payload = json.dumps(settings)
+        self.web_view.page().runJavaScript(f'applyAppSettings({payload});')
+
+    @pyqtSlot(str)
+    def saveAppSettings(self, settings_json):
+        settings = json.loads(settings_json)
+        database.save_app_settings(settings)
+
+    @pyqtSlot(int, str, str, int, str, str, str, str)
+    def saveDeckSettings(self, deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display):
+        database.update_deck_settings(deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display)
+        self.getDecks()
+
+    @pyqtSlot(int)
+    def deleteDeck(self, deck_id):
+        database.delete_deck(deck_id)
         self.getDecks()
 
     @pyqtSlot(int, int)
@@ -203,6 +284,14 @@ class AppBridge(QObject):
         media_base_url = QUrl.fromLocalFile(str(media_dir)).toString() + '/'
         payload = json.dumps({'learning_steps': learning_steps, 'relearning_steps': relearning_steps, 'cards': cards, 'media_base_url': media_base_url, 'answer_display': answer_display})
         self.web_view.page().runJavaScript(f'updateReviewQueue({payload});')
+
+    @pyqtSlot(int, int)
+    def logLapse(self, card_id, rating):
+        """Record a lapse review for a due card that is entering relearning steps.
+        interval_after=0 signals the card is back in learning; ease_factor is unchanged."""
+        card = database.get_card_by_id(card_id)
+        if card:
+            database.create_review(card_id, rating, 0, card.ease_factor)
 
     @pyqtSlot(int, int)
     def submitRating(self, card_id, rating):
