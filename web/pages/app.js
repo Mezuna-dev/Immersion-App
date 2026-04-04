@@ -186,6 +186,10 @@ function showView(viewId) {
         var cssEl = document.getElementById('review-card-css');
         if (cssEl) cssEl.textContent = '';
     }
+    if (viewId !== 'card-preview') {
+        var previewCssEl = document.getElementById('preview-card-css');
+        if (previewCssEl) previewCssEl.textContent = '';
+    }
     if (viewId === 'dashboard' && bridge) {
         bridge.refreshStats();
         populateRetentionDeckSelect();
@@ -1525,4 +1529,78 @@ function deleteCardFromEdit() {
             showView('card-browser');
         }
     });
+}
+
+// ── Card Preview ──
+
+var previewCardTypeId = null;
+
+function openCardPreview() {
+    var typeId = document.getElementById('edit-card-type-select').value;
+    var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
+    previewCardTypeId = typeId;
+
+    // Populate styling fields from the card type
+    document.getElementById('preview-front-template').value = (ct && ct.front_style) || '';
+    document.getElementById('preview-back-template').value = (ct && ct.back_style) || '';
+    document.getElementById('preview-css-style').value = (ct && ct.css_style) || '';
+
+    showView('card-preview');
+    refreshCardPreview();
+}
+
+function getEditCardFields() {
+    var fields = {};
+    document.querySelectorAll('.edit-card-field-input').forEach(function(ta) {
+        fields[ta.getAttribute('data-field')] = ta.value;
+    });
+    return fields;
+}
+
+function refreshCardPreview() {
+    var frontTemplate = document.getElementById('preview-front-template').value;
+    var backTemplate = document.getElementById('preview-back-template').value;
+    var css = document.getElementById('preview-css-style').value;
+    var fields = getEditCardFields();
+
+    // Apply CSS
+    document.getElementById('preview-card-css').textContent = css;
+
+    // Render front
+    var frontEl = document.getElementById('preview-front-render');
+    if (frontTemplate) {
+        setInnerHTMLWithScripts(frontEl, resolveMedia(renderTemplate(frontTemplate, fields)));
+    } else {
+        var firstField = Object.keys(fields)[0];
+        frontEl.textContent = firstField ? fields[firstField] : '';
+    }
+
+    // Render back
+    var backEl = document.getElementById('preview-back-render');
+    var frontHtml = frontEl.innerHTML;
+    if (backTemplate) {
+        setInnerHTMLWithScripts(backEl, resolveMedia(renderTemplate(backTemplate, fields, frontHtml)));
+    } else {
+        var fieldKeys = Object.keys(fields);
+        backEl.textContent = fieldKeys.length > 1 ? fields[fieldKeys[1]] : '';
+    }
+}
+
+function savePreviewStyling() {
+    var ct = cardTypes.find(function(t) { return String(t.id) === String(previewCardTypeId); });
+    if (!ct) { showAlert('Card type not found.'); return; }
+
+    var frontStyle = document.getElementById('preview-front-template').value;
+    var backStyle = document.getElementById('preview-back-template').value;
+    var cssStyle = document.getElementById('preview-css-style').value;
+
+    if (bridge) {
+        bridge.updateCardType(ct.id, ct.name, JSON.stringify(ct.fields), frontStyle, backStyle, cssStyle);
+        // Update local cardTypes cache
+        ct.front_style = frontStyle;
+        ct.back_style = backStyle;
+        ct.css_style = cssStyle;
+        showAlert('Styling saved.');
+        showView('edit-card');
+    }
 }

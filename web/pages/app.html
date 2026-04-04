@@ -408,8 +408,57 @@
                     </div>
                     <div class="d-flex mb-4" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="saveEditCard()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
+                        <button class="btn btn-dark" onclick="openCardPreview()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Preview</button>
                         <button class="btn btn-dark" onclick="showView('card-browser')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
                         <button class="btn btn-danger" onclick="deleteCardFromEdit()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Delete</button>
+                    </div>
+                </div>
+
+                <!-- Card Preview View -->
+                <div id="card-preview-view" class="view-section view-hidden text-white">
+                    <style id="preview-card-css"></style>
+                    <button class="btn btn-dark mb-3" onclick="showView('edit-card')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back to Edit</button>
+                    <h1 class="mb-4">Card Preview</h1>
+                    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                        <!-- Preview Panel -->
+                        <div style="flex: 1; min-width: 320px;">
+                            <div class="card mb-4 settings-card">
+                                <div class="card-body text-white">
+                                    <h2 class="settings-section-title">Front</h2>
+                                    <div id="preview-front-render" style="font-size: 2.5rem; color: white; text-align: center; min-height: 60px; padding: 1rem;"></div>
+                                </div>
+                            </div>
+                            <div class="card mb-4 settings-card">
+                                <div class="card-body text-white">
+                                    <h2 class="settings-section-title">Back</h2>
+                                    <div id="preview-back-render" style="font-size: 2.5rem; color: white; text-align: center; min-height: 60px; padding: 1rem;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Styling Panel -->
+                        <div style="flex: 1; min-width: 320px; max-width: 560px;">
+                            <div class="card mb-4 settings-card">
+                                <div class="card-body text-white">
+                                    <h2 class="settings-section-title">Styling</h2>
+                                    <label class="form-label settings-label" for="preview-front-template">Front Template</label>
+                                    <textarea class="form-control settings-input" id="preview-front-template" oninput="refreshCardPreview()"
+                                              placeholder="HTML template with {{FieldName}} placeholders"
+                                              style="font-family: monospace; height: 100px;"></textarea>
+                                    <label class="form-label settings-label" for="preview-back-template" style="margin-top: 1rem;">Back Template</label>
+                                    <textarea class="form-control settings-input" id="preview-back-template" oninput="refreshCardPreview()"
+                                              placeholder="HTML template with {{FieldName}} placeholders"
+                                              style="font-family: monospace; height: 100px;"></textarea>
+                                    <label class="form-label settings-label" for="preview-css-style" style="margin-top: 1rem;">CSS</label>
+                                    <textarea class="form-control settings-input" id="preview-css-style" oninput="refreshCardPreview()"
+                                              placeholder=".my-class { font-size: 2rem; color: white; }"
+                                              style="font-family: monospace; height: 100px;"></textarea>
+                                    <div class="d-flex mt-3" style="gap: 0.75rem;">
+                                        <button class="btn btn-dark btn-accent" onclick="savePreviewStyling()" style="font-weight: 600;">Save Styling</button>
+                                        <button class="btn btn-dark" onclick="showView('edit-card')" style="background-color: #3a3555 !important; font-weight: 600;">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
