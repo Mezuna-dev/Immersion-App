@@ -328,6 +328,18 @@
                             <input type="text" class="form-control" id="browse-search-input" placeholder="Search cards..."
                                    oninput="debounceBrowseSearch()" style="color: black; border: none; font-size: 1rem; background-color: white;">
                         </div>
+                        <div>
+                            <label class="form-label" style="font-size: 0.85rem;">Sort By</label>
+                            <select class="form-control dash-select" id="browse-sort-select" onchange="fetchBrowseCards()"
+                                    style="width: 16rem; font-size: 1rem;">
+                                <option value="date_created_desc">Date Created (Newest)</option>
+                                <option value="date_created_asc">Date Created (Oldest)</option>
+                                <option value="due_date_asc">Due Date</option>
+                                <option value="interval_asc">Interval (Lowest)</option>
+                                <option value="interval_desc">Interval (Highest)</option>
+                                <option value="front_asc">Front (A–Z)</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="browse-card-count" style="font-size: 0.85rem; color: #888; margin-bottom: 0.75rem; animation: fadeIn 0.6s ease;"></div>
                     <div id="browse-card-list" style="animation: fadeIn 0.6s ease;"></div>

@@ -292,11 +292,11 @@ class AppBridge(QObject):
         if card:
             database.create_review(card_id, rating, 0, card.ease_factor)
 
-    @pyqtSlot(str, str)
-    def browseCards(self, deck_id_str, search_query):
+    @pyqtSlot(str, str, str)
+    def browseCards(self, deck_id_str, search_query, sort_by):
         deck_id = int(deck_id_str) if deck_id_str and deck_id_str != '0' else None
         sq = search_query.strip() if search_query else None
-        cards = database.browse_cards(deck_id=deck_id, search_query=sq)
+        cards = database.browse_cards(deck_id=deck_id, search_query=sq, sort_by=sort_by or None)
         payload = json.dumps(cards)
         self.web_view.page().runJavaScript(f'updateBrowseCards({payload});')
 

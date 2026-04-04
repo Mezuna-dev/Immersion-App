@@ -1142,9 +1142,11 @@ function fetchBrowseCards() {
     if (!bridge) return;
     var deckSel = document.getElementById('browse-deck-select');
     var searchInput = document.getElementById('browse-search-input');
+    var sortSel = document.getElementById('browse-sort-select');
     bridge.browseCards(
         String(deckSel ? deckSel.value : '0'),
-        searchInput ? searchInput.value : ''
+        searchInput ? searchInput.value : '',
+        sortSel ? sortSel.value : 'date_created_desc'
     );
 }
 

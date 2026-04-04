@@ -470,7 +470,7 @@ def delete_card(card_id):
     con.close()
 
 
-def browse_cards(deck_id=None, search_query=None) -> list:
+def browse_cards(deck_id=None, search_query=None, sort_by=None) -> list:
     con = create_db_connection()
     cur = con.cursor()
 
@@ -496,7 +496,16 @@ def browse_cards(deck_id=None, search_query=None) -> list:
         like = f"%{search_query}%"
         params.extend([like, like, like])
 
-    query += " ORDER BY c.ID DESC"
+    sort_map = {
+        'date_created_desc': 'c.ID DESC',
+        'date_created_asc': 'c.ID ASC',
+        'due_date_asc': 'c.Due_Date ASC',
+        'interval_asc': 'c.Interval ASC',
+        'interval_desc': 'c.Interval DESC',
+        'front_asc': 'c.Card_Front ASC',
+    }
+    order = sort_map.get(sort_by, 'c.ID DESC')
+    query += f" ORDER BY {order}"
 
     cur.execute(query, params)
     rows = cur.fetchall()
