@@ -224,12 +224,14 @@ function populateCardDeckSelect() {
     if (!select) return;
     var preselect = createCardPreselectedDeckId !== null ? String(createCardPreselectedDeckId) : select.value;
     select.innerHTML = '';
+    var frag = document.createDocumentFragment();
     decks.forEach(function(deck) {
         var opt = document.createElement('option');
         opt.value = deck.id;
         opt.textContent = deck.name;
-        select.appendChild(opt);
+        frag.appendChild(opt);
     });
+    select.appendChild(frag);
     if (preselect && decks.some(function(d) { return String(d.id) === preselect; })) {
         select.value = preselect;
     }
@@ -240,12 +242,14 @@ function populateRetentionDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
+    var frag = document.createDocumentFragment();
     decks.forEach(function(deck) {
         var opt = document.createElement('option');
         opt.value = deck.id;
         opt.textContent = deck.name;
-        select.appendChild(opt);
+        frag.appendChild(opt);
     });
+    select.appendChild(frag);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -283,12 +287,14 @@ function populateHeatmapDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
+    var frag = document.createDocumentFragment();
     decks.forEach(function(deck) {
         var opt = document.createElement('option');
         opt.value = deck.id;
         opt.textContent = deck.name;
-        select.appendChild(opt);
+        frag.appendChild(opt);
     });
+    select.appendChild(frag);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -346,6 +352,8 @@ function renderHeatmapSVG(counts) {
     var ns = 'http://www.w3.org/2000/svg';
     var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+    var frag = document.createDocumentFragment();
+
     // Day-of-week labels (Mon, Wed, Fri)
     [[1,'Mon'],[3,'Wed'],[5,'Fri']].forEach(function(pair) {
         var txt = document.createElementNS(ns, 'text');
@@ -355,7 +363,7 @@ function renderHeatmapSVG(counts) {
         txt.setAttribute('fill', '#777');
         txt.setAttribute('font-size', '9');
         txt.textContent = pair[1];
-        svg.appendChild(txt);
+        frag.appendChild(txt);
     });
 
     var lastMonthW = -5;
@@ -376,7 +384,7 @@ function renderHeatmapSVG(counts) {
                 mTxt.setAttribute('fill', '#aaa');
                 mTxt.setAttribute('font-size', '10');
                 mTxt.textContent = MONTH_NAMES[probe.getMonth()];
-                svg.appendChild(mTxt);
+                frag.appendChild(mTxt);
                 lastMonthW = w;
                 break;
             }
@@ -385,8 +393,6 @@ function renderHeatmapSVG(counts) {
         for (var d = 0; d < 7; d++) {
             var day = new Date(weekStart);
             day.setDate(weekStart.getDate() + d);
-            // Remove the condition that stops at today's date
-            // if (day > today) continue;
 
             var dStr = toDateStr(day);
             var cnt = counts[dStr] || 0;
@@ -398,21 +404,29 @@ function renderHeatmapSVG(counts) {
             rect.setAttribute('height', CELL);
             rect.setAttribute('rx', 2);
             rect.setAttribute('fill', cellColor(cnt));
+            rect.dataset.date = dStr;
+            rect.dataset.count = cnt;
 
-            (function(dateStr, count) {
-                rect.addEventListener('mouseenter', function() {
-                    var tip = document.getElementById('heatmap-tooltip');
-                    if (tip) tip.textContent = dateStr + ': ' + count + (count === 1 ? ' review' : ' reviews');
-                });
-                rect.addEventListener('mouseleave', function() {
-                    var tip = document.getElementById('heatmap-tooltip');
-                    if (tip) tip.textContent = '';
-                });
-            })(dStr, cnt);
-
-            svg.appendChild(rect);
+            frag.appendChild(rect);
         }
     }
+
+    svg.appendChild(frag);
+
+    // Single delegated event listener for tooltips instead of one per cell
+    svg.addEventListener('mouseenter', function(e) {
+        if (e.target.tagName === 'rect' && e.target.dataset.date) {
+            var tip = document.getElementById('heatmap-tooltip');
+            var count = parseInt(e.target.dataset.count, 10);
+            if (tip) tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' review' : ' reviews');
+        }
+    }, true);
+    svg.addEventListener('mouseleave', function(e) {
+        if (e.target.tagName === 'rect' && e.target.dataset.date) {
+            var tip = document.getElementById('heatmap-tooltip');
+            if (tip) tip.textContent = '';
+        }
+    }, true);
 }
 
 function updateDecks(deckData) {
@@ -430,13 +444,13 @@ function updateDecks(deckData) {
         container.innerHTML = '<p class="text">No decks found. Create or import a deck to get started.</p>';
         return;
     }
+    var frag = document.createDocumentFragment();
     decks.forEach(function(deck) {
         var card = document.createElement('div');
-        card.className = 'card text-white mb-3';
+        card.className = 'card text-white mb-3 deck-card';
         card.style.backgroundColor = currentAccent;
         card.style.cursor = 'pointer';
         card.style.marginRight = '300px';
-        card.style.animation = 'fadeIn 0.6s ease';
         card.innerHTML =
             '<a href="#" class="card-link" style="text-decoration: none;">' +
                 '<div class="card-body rounded d-flex justify-content-between align-items-center" style="background-color: ' + currentAccent + ';">' +
@@ -452,8 +466,9 @@ function updateDecks(deckData) {
             e.preventDefault();
             showDeckDetails(deck);
         });
-        container.appendChild(card);
+        frag.appendChild(card);
     });
+    container.appendChild(frag);
 }
 
 function showCreateCard(deckId) {
@@ -482,15 +497,15 @@ function showDeckDetails(deck) {
     var remainingNew = Math.max(0, deck.total - deck.young - deck.mature);
     deckDetailsView.innerHTML = `
         <input type="hidden" id="current-deck-id" value="${deck.id}">
-        <h1 class="mb-3" style="animation: fadeIn 0.6s ease;">${deck.name}</h1>
+        <h1 class="mb-3">${deck.name}</h1>
         <div style="display: flex; align-items: flex-start; gap: 6rem; flex-wrap: wrap;">
             <div style="flex: 0 0 auto;">
-                <a href="#" class="btn btn-dark btn-accent" onclick="showDeckSettings()" style="margin-bottom: 1.25rem; animation: fadeIn 0.6s ease; display: inline-block;">Settings</a>
-                <p style="animation: fadeIn 0.6s ease;">Total Cards: ${deck.total}</p>
-                <p style="animation: fadeIn 0.6s ease;">Due Cards: ${deck.due}</p>
-                <p style="animation: fadeIn 0.6s ease;">New Cards: ${deck.new}</p>
-                <p style="animation: fadeIn 0.6s ease;">Young Cards: ${deck.young}</p>
-                <p style="animation: fadeIn 0.6s ease;">Mature Cards: ${deck.mature}</p>
+                <a href="#" class="btn btn-dark btn-accent" onclick="showDeckSettings()" style="margin-bottom: 1.25rem; display: inline-block;">Settings</a>
+                <p>Total Cards: ${deck.total}</p>
+                <p>Due Cards: ${deck.due}</p>
+                <p>New Cards: ${deck.new}</p>
+                <p>Young Cards: ${deck.young}</p>
+                <p>Mature Cards: ${deck.mature}</p>
                 <div class="card mb-4" style="background-color: ${currentAccent}; width: 18rem;">
                     <div class="card-body text-white">
                         <h5 class="card-title">Description</h5>
@@ -682,7 +697,7 @@ function playAudioSequentially(container) {
 function resolveMedia(text) {
     if (!text) return text;
     text = text.replace(/\[image:([^\]]+)\]/g,
-        '<img src="' + mediaBaseUrl + '$1" style="max-width:100%;max-height:300px;border-radius:6px;display:block;margin:0.5rem auto;">');
+        '<img loading="lazy" src="' + mediaBaseUrl + '$1" style="max-width:100%;max-height:300px;border-radius:6px;display:block;margin:0.5rem auto;">');
     text = text.replace(/\[sound:([^\]]+)\]/g,
         '<audio controls src="' + mediaBaseUrl + '$1" style="display:block;margin:0.5rem auto;"></audio>');
     // Handle bare <img src="filename"> from Anki templates (no protocol or path separator in src)
@@ -890,10 +905,11 @@ function updateCardTypes(types) {
         if (types.length === 0) {
             list.innerHTML = '<p>No card types found.</p>';
         } else {
+            var listFrag = document.createDocumentFragment();
             types.forEach(function(ct) {
                 var div = document.createElement('div');
                 div.className = 'card text-white mb-3';
-                div.style.cssText = 'background-color:' + currentAccent + ';width:50%;animation:fadeIn 0.6s ease;';
+                div.style.cssText = 'background-color:' + currentAccent + ';width:50%;';
                 var actionButtons = ct.is_default ? '' :
                     '<div class="mt-2 d-flex gap-2">' +
                     '<button class="btn btn-dark btn-sm" onclick="showEditCardTypeById(' + ct.id + ')" style="background-color:#2d2a3e;">Edit</button>' +
@@ -903,20 +919,23 @@ function updateCardTypes(types) {
                     (ct.is_default ? ' <span class="badge" style="background-color:#2d2a3e;font-size:0.75rem;">Default</span>' : '') +
                     '</h5><p class="mb-1" style="font-size:0.9rem;">Fields: ' + ct.fields.join(', ') + '</p>' +
                     actionButtons + '</div>';
-                list.appendChild(div);
+                listFrag.appendChild(div);
             });
+            list.appendChild(listFrag);
         }
     }
     var select = document.getElementById('card-type-select');
     if (select) {
         var prev = select.value;
         select.innerHTML = '';
+        var selectFrag = document.createDocumentFragment();
         types.forEach(function(ct) {
             var opt = document.createElement('option');
             opt.value = ct.id;
             opt.textContent = ct.name;
-            select.appendChild(opt);
+            selectFrag.appendChild(opt);
         });
+        select.appendChild(selectFrag);
         if (prev && types.some(function(ct) { return String(ct.id) === prev; })) select.value = prev;
         renderCardFields(select.value);
     }
@@ -1098,18 +1117,22 @@ function createCard() {
 
 var browseDebounceTimer = null;
 var browseCards = [];
+var browsePage = 0;
+var BROWSE_PAGE_SIZE = 100;
 
 function populateBrowseDeckSelect() {
     var select = document.getElementById('browse-deck-select');
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
+    var frag = document.createDocumentFragment();
     decks.forEach(function(deck) {
         var opt = document.createElement('option');
         opt.value = deck.id;
         opt.textContent = deck.name;
-        select.appendChild(opt);
+        frag.appendChild(opt);
     });
+    select.appendChild(frag);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -1145,40 +1168,92 @@ function truncate(text, maxLen) {
 
 function updateBrowseCards(cards) {
     browseCards = cards;
+    browsePage = 0;
+    renderBrowsePage();
+}
+
+function renderBrowsePage() {
     var container = document.getElementById('browse-card-list');
     var countEl = document.getElementById('browse-card-count');
     if (!container) return;
 
-    countEl.textContent = cards.length + (cards.length === 1 ? ' card' : ' cards');
+    var totalCards = browseCards.length;
+    countEl.textContent = totalCards + (totalCards === 1 ? ' card' : ' cards');
 
-    if (cards.length === 0) {
+    if (totalCards === 0) {
         container.innerHTML = '<p style="opacity: 0.6;">No cards found.</p>';
         return;
     }
 
-    var html = '<table class="browse-table"><thead><tr>' +
-        '<th>Front</th><th>Back</th><th>Deck</th><th>Type</th><th>Due</th><th>Interval</th>' +
-        '</tr></thead><tbody>';
+    var totalPages = Math.ceil(totalCards / BROWSE_PAGE_SIZE);
+    var start = browsePage * BROWSE_PAGE_SIZE;
+    var end = Math.min(start + BROWSE_PAGE_SIZE, totalCards);
+    var pageCards = browseCards.slice(start, end);
 
-    cards.forEach(function(card) {
+    var table = document.createElement('table');
+    table.className = 'browse-table';
+
+    // Event delegation: single click handler on table
+    table.addEventListener('click', function(e) {
+        var row = e.target.closest('.browse-row');
+        if (row && row.dataset.cardId) {
+            editCardFromBrowser(parseInt(row.dataset.cardId, 10));
+        }
+    });
+
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Front</th><th>Back</th><th>Deck</th><th>Type</th><th>Due</th><th>Interval</th></tr>';
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < pageCards.length; i++) {
+        var card = pageCards[i];
+        var tr = document.createElement('tr');
+        tr.className = 'browse-row';
+        tr.dataset.cardId = card.id;
         var frontText = truncate(card.front, 60);
         var backText = truncate(card.back, 60);
-        var statusBadge = '';
-        if (card.is_new) {
-            statusBadge = ' <span class="browse-badge browse-badge-new">New</span>';
-        }
-        html += '<tr class="browse-row" onclick="editCardFromBrowser(' + card.id + ')">' +
+        var statusBadge = card.is_new ? ' <span class="browse-badge browse-badge-new">New</span>' : '';
+        tr.innerHTML =
             '<td>' + frontText + statusBadge + '</td>' +
             '<td>' + backText + '</td>' +
             '<td>' + (card.deck_name || '') + '</td>' +
             '<td>' + (card.type_name || '') + '</td>' +
             '<td>' + (card.due_date || '—') + '</td>' +
-            '<td>' + (card.interval || 0) + 'd</td>' +
-            '</tr>';
-    });
+            '<td>' + (card.interval || 0) + 'd</td>';
+        frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+    table.appendChild(tbody);
 
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    container.innerHTML = '';
+    container.appendChild(table);
+
+    // Pagination controls
+    if (totalPages > 1) {
+        var nav = document.createElement('div');
+        nav.style.cssText = 'display:flex;justify-content:center;align-items:center;gap:1rem;margin-top:0.75rem;';
+        var prevBtn = document.createElement('button');
+        prevBtn.className = 'btn btn-dark btn-sm';
+        prevBtn.textContent = 'Previous';
+        prevBtn.disabled = browsePage === 0;
+        prevBtn.style.backgroundColor = '#2d2a3e';
+        prevBtn.addEventListener('click', function() { if (browsePage > 0) { browsePage--; renderBrowsePage(); } });
+        var info = document.createElement('span');
+        info.style.color = '#aaa';
+        info.textContent = 'Page ' + (browsePage + 1) + ' of ' + totalPages;
+        var nextBtn = document.createElement('button');
+        nextBtn.className = 'btn btn-dark btn-sm';
+        nextBtn.textContent = 'Next';
+        nextBtn.disabled = browsePage >= totalPages - 1;
+        nextBtn.style.backgroundColor = '#2d2a3e';
+        nextBtn.addEventListener('click', function() { if (browsePage < totalPages - 1) { browsePage++; renderBrowsePage(); } });
+        nav.appendChild(prevBtn);
+        nav.appendChild(info);
+        nav.appendChild(nextBtn);
+        container.appendChild(nav);
+    }
 }
 
 var editCardData = null; // Store the card being edited
@@ -1202,23 +1277,27 @@ function loadCardForEdit(data) {
     // Populate deck select
     var deckSelect = document.getElementById('edit-card-deck-select');
     deckSelect.innerHTML = '';
+    var deckFrag = document.createDocumentFragment();
     decks.forEach(function(deck) {
         var opt = document.createElement('option');
         opt.value = deck.id;
         opt.textContent = deck.name;
-        deckSelect.appendChild(opt);
+        deckFrag.appendChild(opt);
     });
+    deckSelect.appendChild(deckFrag);
     if (card.deck_id) deckSelect.value = card.deck_id;
 
     // Populate card type select
     var typeSelect = document.getElementById('edit-card-type-select');
     typeSelect.innerHTML = '';
+    var typeFrag = document.createDocumentFragment();
     cardTypes.forEach(function(ct) {
         var opt = document.createElement('option');
         opt.value = ct.id;
         opt.textContent = ct.name;
-        typeSelect.appendChild(opt);
+        typeFrag.appendChild(opt);
     });
+    typeSelect.appendChild(typeFrag);
     if (card.card_type_id) typeSelect.value = card.card_type_id;
 
     // Stats

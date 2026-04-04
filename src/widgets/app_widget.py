@@ -17,36 +17,35 @@ class AppBridge(QObject):
 
     @pyqtSlot()
     def refreshStats(self):
-        due_cards = database.get_due_cards()
         decks = database.get_all_decks()
-        total_new = sum(
-            len(database.get_new_cards(
-                deck_id=deck.id,
-                limit=max(0, deck.new_cards_limit - database.get_new_cards_introduced_today(deck_id=deck.id))
-            )) for deck in decks
-        )
-        self.web_view.page().runJavaScript(f'updateStats({len(due_cards)}, {total_new});')
+        all_stats = database.get_all_deck_stats()
+        total_due = sum(s['due'] for s in all_stats.values())
+        total_new = 0
+        for deck in decks:
+            stats = all_stats.get(deck.id, {'new_available': 0})
+            introduced_today = database.get_new_cards_introduced_today(deck_id=deck.id)
+            remaining_new = max(0, deck.new_cards_limit - introduced_today)
+            total_new += min(stats['new_available'], remaining_new)
+        self.web_view.page().runJavaScript(f'updateStats({total_due}, {total_new});')
 
     @pyqtSlot()
     def getDecks(self):
         decks = database.get_all_decks()
+        all_stats = database.get_all_deck_stats()
         deck_list = []
         for deck in decks:
-            due_count = len(database.get_due_cards(deck_id=deck.id))
+            stats = all_stats.get(deck.id, {'total': 0, 'young': 0, 'mature': 0, 'due': 0, 'new_available': 0})
             introduced_today = database.get_new_cards_introduced_today(deck_id=deck.id)
             remaining_new = max(0, deck.new_cards_limit - introduced_today)
-            new_count = len(database.get_new_cards(deck_id=deck.id, limit=remaining_new))
-            total_count = database.get_cards_by_deck(deck_id=deck.id)
-            young_count = database.get_young_card_count(deck_id=deck.id)
-            mature_count = database.get_mature_card_count(deck_id=deck.id)
+            new_count = min(stats['new_available'], remaining_new)
             deck_list.append({
                 'id': deck.id,
                 'name': deck.name,
-                'due': due_count,
+                'due': stats['due'],
                 'new': new_count,
-                'total': len(total_count),
-                'young': young_count,
-                'mature': mature_count,
+                'total': stats['total'],
+                'young': stats['young'],
+                'mature': stats['mature'],
                 'description': deck.description,
                 'new_cards_limit': deck.new_cards_limit,
                 'learning_steps': deck.learning_steps or '1 10',

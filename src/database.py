@@ -596,6 +596,36 @@ def get_mature_card_count(deck_id=None):
     con.close()
     return count
 
+
+def get_all_deck_stats():
+    """Fetch per-deck card counts in a single query instead of N+1 queries per deck."""
+    todays_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT
+            Deck_ID,
+            COUNT(*) AS total,
+            SUM(CASE WHEN Is_New = 0 AND Learning_Step IS NULL AND Interval > 0 AND Interval < 21 THEN 1 ELSE 0 END) AS young,
+            SUM(CASE WHEN Is_New = 0 AND Learning_Step IS NULL AND Interval >= 21 THEN 1 ELSE 0 END) AS mature,
+            SUM(CASE WHEN Due_Date <= ? AND Due_Date IS NOT NULL THEN 1 ELSE 0 END) AS due,
+            SUM(CASE WHEN Is_New = 1 AND Due_Date IS NULL THEN 1 ELSE 0 END) AS new_available
+        FROM Card
+        GROUP BY Deck_ID
+    """, (todays_date,))
+    rows = cur.fetchall()
+    con.close()
+    stats = {}
+    for r in rows:
+        stats[r[0]] = {
+            'total': r[1],
+            'young': r[2],
+            'mature': r[3],
+            'due': r[4],
+            'new_available': r[5],
+        }
+    return stats
+
 # --- Review Functions --------------------------------
 
 def get_new_cards_introduced_today(deck_id=None):
