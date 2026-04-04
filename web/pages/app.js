@@ -448,20 +448,35 @@ function updateDecks(deckData) {
     decks.forEach(function(deck) {
         var card = document.createElement('div');
         card.className = 'card text-white mb-3 deck-card';
-        card.style.backgroundColor = currentAccent;
+        card.style.backgroundColor = '#2d2a3e';
+        card.style.borderTop = '3px solid ' + currentAccent;
+        card.style.borderLeft = 'none';
+        card.style.borderRight = 'none';
+        card.style.borderBottom = '1px solid #3d3a50';
         card.style.cursor = 'pointer';
-        card.style.marginRight = '300px';
+        card.style.maxWidth = '600px';
+        card.style.transition = 'background-color 0.15s ease';
+        var dueBadge = deck.due > 0
+            ? '<span class="badge" style="background-color:' + currentAccent + '; font-size:0.82rem; padding:0.35rem 0.65rem;">' + deck.due + ' due</span>'
+            : '';
+        var newBadge = deck.new > 0
+            ? '<span class="badge" style="background-color:#4a90d9; font-size:0.82rem; padding:0.35rem 0.65rem;">' + deck.new + ' new</span>'
+            : '';
+        var emptyLabel = (deck.due === 0 && deck.new === 0)
+            ? '<span style="color:#666; font-size:0.85rem;">Nothing due</span>'
+            : '';
         card.innerHTML =
-            '<a href="#" class="card-link" style="text-decoration: none;">' +
-                '<div class="card-body rounded d-flex justify-content-between align-items-center" style="background-color: ' + currentAccent + ';">' +
-                    '<h5 class="card-title mb-0" style="color: white;">' + deck.name + '</h5>' +
-                    '<div class="d-flex gap-3">' +
-                        '<span class="badge" style="background-color:#2d2a3e; font-size:0.9rem;">' + deck.due + ' due</span>' +
-                        '<span class="badge" style="background-color:#2d2a3e; font-size:0.9rem;">' + deck.new + ' new</span>' +
-                    '</div>' +
-                '</div>'
-            '</a>';
-
+            '<div class="card-body d-flex justify-content-between align-items-center" style="padding: 0.9rem 1.25rem;">' +
+                '<div>' +
+                    '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
+                    '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
+                '</div>' +
+                '<div class="d-flex gap-2 align-items-center">' +
+                    dueBadge + newBadge + emptyLabel +
+                '</div>' +
+            '</div>';
+        card.addEventListener('mouseenter', function() { card.style.backgroundColor = '#35324a'; });
+        card.addEventListener('mouseleave', function() { card.style.backgroundColor = '#2d2a3e'; });
         card.addEventListener('click', function(e) {
             e.preventDefault();
             showDeckDetails(deck);
@@ -497,28 +512,62 @@ function showDeckDetails(deck) {
     var remainingNew = Math.max(0, deck.total - deck.young - deck.mature);
     deckDetailsView.innerHTML = `
         <input type="hidden" id="current-deck-id" value="${deck.id}">
-        <h1 class="mb-3">${deck.name}</h1>
-        <div style="display: flex; align-items: flex-start; gap: 6rem; flex-wrap: wrap;">
-            <div style="flex: 0 0 auto;">
-                <a href="#" class="btn btn-dark btn-accent" onclick="showDeckSettings()" style="margin-bottom: 1.25rem; display: inline-block;">Settings</a>
-                <p>Total Cards: ${deck.total}</p>
-                <p>Due Cards: ${deck.due}</p>
-                <p>New Cards: ${deck.new}</p>
-                <p>Young Cards: ${deck.young}</p>
-                <p>Mature Cards: ${deck.mature}</p>
-                <div class="card mb-4" style="background-color: ${currentAccent}; width: 18rem;">
-                    <div class="card-body text-white">
-                        <h5 class="card-title">Description</h5>
-                        <p class="card-text">${deck.description || 'No description provided.'}</p>
+        <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">\u2190 Back</button>
+        <div class="d-flex align-items-center justify-content-between mb-4" style="flex-wrap: wrap; gap: 1rem;">
+            <h1 class="mb-0">${deck.name}</h1>
+            <div class="d-flex" style="gap: 0.75rem; flex-wrap: wrap;">
+                <button class="btn btn-dark btn-accent" onclick="startReview(${deck.id})" style="font-weight: 600; min-width: 9rem; height: 2.75rem;">Start Review</button>
+                <button class="btn btn-dark btn-accent" onclick="showCreateCard(${deck.id})" style="font-weight: 600; height: 2.75rem;">Add Card</button>
+                <button class="btn btn-dark" onclick="showDeckSettings()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.75rem;">Settings</button>
+            </div>
+        </div>
+
+        <div class="card mb-3 settings-card" style="max-width: 560px;">
+            <div class="card-body text-white">
+                <h2 class="settings-section-title">Card Stats</h2>
+                <div class="row text-center g-0 mb-3">
+                    <div class="col dash-stat-cell">
+                        <div class="dash-stat-label">Due</div>
+                        <div class="dash-stat-value" style="color: var(--accent);">${deck.due}</div>
+                    </div>
+                    <div class="col dash-stat-cell">
+                        <div class="dash-stat-label">New</div>
+                        <div class="dash-stat-value" style="color: #4a90d9;">${deck.new}</div>
+                    </div>
+                    <div class="col dash-stat-cell" style="border-right: none;">
+                        <div class="dash-stat-label">Total</div>
+                        <div class="dash-stat-value">${deck.total}</div>
                     </div>
                 </div>
-                <button class="btn btn-dark btn-accent" onclick="startReview(${deck.id})" style="margin-top: 1rem;">Start Review</button>
-                <button class="btn btn-dark btn-accent" onclick="showCreateCard(${deck.id})" style="margin-top: 1rem;">Add New Card</button>
-                <button class="btn btn-dark btn-accent" onclick="showView('srs')" style="margin-top: 1rem;">Back to Decks</button>
-                <button class="btn btn-danger" onclick="deleteDeck(${deck.id})" style="margin-top: 1rem;">Delete Deck</button>
+                <hr style="border-color: #3d3a50; margin: 0 0 0.75rem;">
+                <div class="row text-center g-0">
+                    <div class="col dash-stat-cell">
+                        <div class="dash-stat-label">Young</div>
+                        <div class="dash-stat-value" style="font-size: 1.4rem;">${deck.young}</div>
+                    </div>
+                    <div class="col dash-stat-cell" style="border-right: none;">
+                        <div class="dash-stat-label">Mature</div>
+                        <div class="dash-stat-value" style="font-size: 1.4rem; color: #27ae60;">${deck.mature}</div>
+                    </div>
+                </div>
             </div>
-            <div id="deck-pie-chart" style="flex: 0 0 420px; align-self: center; margin-left: 2rem;"></div>
         </div>
+
+        ${deck.total > 0 ? `
+        <div class="card mb-3 settings-card" style="max-width: 560px;">
+            <div class="card-body text-white">
+                <h2 class="settings-section-title">Breakdown</h2>
+                <div id="deck-pie-chart"></div>
+            </div>
+        </div>` : ''}
+
+        ${deck.description ? `
+        <div class="card mb-3 settings-card" style="max-width: 560px;">
+            <div class="card-body text-white">
+                <h2 class="settings-section-title">Description</h2>
+                <p style="font-size: 0.95rem; opacity: 0.85; margin-bottom: 0;">${deck.description}</p>
+            </div>
+        </div>` : ''}
     `;
     showView('deck-details');
     if (deck.total > 0 && typeof Plotly !== 'undefined') {
@@ -556,6 +605,13 @@ function deleteDeck(deckId) {
     if (!bridge) return;
     if (!confirm('Are you sure you want to delete this deck? All cards in this deck will also be deleted. This cannot be undone.')) return;
     bridge.deleteDeck(deckId);
+    showView('srs');
+}
+
+function deleteDeckFromSettings() {
+    if (!currentDeckForDetails || !bridge) return;
+    if (!confirm('Are you sure you want to delete "' + currentDeckForDetails.name + '"? All cards in this deck will also be deleted. This cannot be undone.')) return;
+    bridge.deleteDeck(currentDeckForDetails.id);
     showView('srs');
 }
 
@@ -947,19 +1003,30 @@ function renderCardFields(typeId) {
     container.innerHTML = '';
     var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
     if (!ct) return;
+    var card = document.createElement('div');
+    card.className = 'card mb-4 settings-card';
+    card.style.maxWidth = '560px';
+    var cardBody = document.createElement('div');
+    cardBody.className = 'card-body text-white';
+    var title = document.createElement('h2');
+    title.className = 'settings-section-title';
+    title.textContent = 'Content';
+    cardBody.appendChild(title);
     ct.fields.forEach(function(fieldName) {
         var wrapper = document.createElement('div');
         wrapper.className = 'mb-3';
-        wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + fieldName + '</label>' +
-            '<textarea class="form-control card-field-input" data-field="' + fieldName +
+        wrapper.innerHTML = '<label class="form-label settings-label">' + fieldName + '</label>' +
+            '<textarea class="form-control settings-input card-field-input" data-field="' + fieldName +
             '" placeholder="Enter ' + fieldName +
-            '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>' +
+            '" style="height:100px;"></textarea>' +
             '<div class="mt-1 d-flex gap-2">' +
             '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="image" onclick="attachMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
             '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="audio" onclick="attachMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
             '</div>';
-        container.appendChild(wrapper);
+        cardBody.appendChild(wrapper);
     });
+    card.appendChild(cardBody);
+    container.appendChild(card);
 }
 
 function addCardTypeField(defaultValue) {
@@ -968,9 +1035,8 @@ function addCardTypeField(defaultValue) {
     var row = document.createElement('div');
     row.className = 'd-flex align-items-center mb-2';
     row.id = 'row-' + id;
-    row.innerHTML = '<input type="text" class="form-control card-type-field-input" id="' + id +
-        '" placeholder="Field name" value="' + (defaultValue || '') +
-        '" style="color:black;border:none;font-size:130%;background-color:white;">' +
+    row.innerHTML = '<input type="text" class="form-control settings-input card-type-field-input" id="' + id +
+        '" placeholder="Field name" value="' + (defaultValue || '') + '">' +
         '<button class="btn btn-dark ms-2" onclick="removeCardTypeField(\'row-' + id +
         '\')" style="background-color:#c0392b;min-width:2.5rem;">✕</button>';
     document.getElementById('card-type-fields-list').appendChild(row);
@@ -1026,9 +1092,8 @@ function addEditCardTypeField(defaultValue) {
     var row = document.createElement('div');
     row.className = 'd-flex align-items-center mb-2';
     row.id = 'edit-row-' + id;
-    row.innerHTML = '<input type="text" class="form-control edit-card-type-field-input" id="' + id +
-        '" placeholder="Field name" value="' + (defaultValue || '') +
-        '" style="color:black;border:none;font-size:130%;background-color:white;">' +
+    row.innerHTML = '<input type="text" class="form-control settings-input edit-card-type-field-input" id="' + id +
+        '" placeholder="Field name" value="' + (defaultValue || '') + '">' +
         '<button class="btn btn-dark ms-2" onclick="removeEditCardTypeField(\'edit-row-' + id +
         '\')" style="background-color:#c0392b;min-width:2.5rem;">✕</button>';
     document.getElementById('edit-card-type-fields-list').appendChild(row);
@@ -1353,40 +1418,62 @@ function renderEditCardFields(typeId, existingFields) {
             { name: 'Front', value: (existingFields && existingFields['Front']) || (editCardData ? editCardData.front : '') || '' },
             { name: 'Back', value: (existingFields && existingFields['Back']) || (editCardData ? editCardData.back : '') || '' }
         ];
+        var rawCard = document.createElement('div');
+        rawCard.className = 'card mb-4 settings-card';
+        rawCard.style.maxWidth = '560px';
+        var rawCardBody = document.createElement('div');
+        rawCardBody.className = 'card-body text-white';
+        var rawTitle = document.createElement('h2');
+        rawTitle.className = 'settings-section-title';
+        rawTitle.textContent = 'Content';
+        rawCardBody.appendChild(rawTitle);
         rawFields.forEach(function(rf) {
             var wrapper = document.createElement('div');
             wrapper.className = 'mb-3';
-            wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + rf.name + '</label>' +
-                '<textarea class="form-control edit-card-field-input" data-field="' + rf.name +
+            wrapper.innerHTML = '<label class="form-label settings-label">' + rf.name + '</label>' +
+                '<textarea class="form-control settings-input edit-card-field-input" data-field="' + rf.name +
                 '" placeholder="Enter ' + rf.name +
-                '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>' +
+                '" style="height:100px;"></textarea>' +
                 '<div class="mt-1 d-flex gap-2">' +
                 '<button type="button" class="btn btn-dark btn-sm" data-field="' + rf.name + '" data-media="image" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
                 '<button type="button" class="btn btn-dark btn-sm" data-field="' + rf.name + '" data-media="audio" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
                 '</div>';
-            container.appendChild(wrapper);
+            rawCardBody.appendChild(wrapper);
             wrapper.querySelector('textarea').value = rf.value;
         });
+        rawCard.appendChild(rawCardBody);
+        container.appendChild(rawCard);
         return;
     }
 
+    var card = document.createElement('div');
+    card.className = 'card mb-4 settings-card';
+    card.style.maxWidth = '560px';
+    var cardBody = document.createElement('div');
+    cardBody.className = 'card-body text-white';
+    var title = document.createElement('h2');
+    title.className = 'settings-section-title';
+    title.textContent = 'Content';
+    cardBody.appendChild(title);
     ct.fields.forEach(function(fieldName) {
         var wrapper = document.createElement('div');
         wrapper.className = 'mb-3';
-        wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + fieldName + '</label>' +
-            '<textarea class="form-control edit-card-field-input" data-field="' + fieldName +
+        wrapper.innerHTML = '<label class="form-label settings-label">' + fieldName + '</label>' +
+            '<textarea class="form-control settings-input edit-card-field-input" data-field="' + fieldName +
             '" placeholder="Enter ' + fieldName +
-            '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>' +
+            '" style="height:100px;"></textarea>' +
             '<div class="mt-1 d-flex gap-2">' +
             '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="image" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
             '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="audio" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
             '</div>';
-        container.appendChild(wrapper);
+        cardBody.appendChild(wrapper);
         var ta = wrapper.querySelector('textarea');
         if (existingFields && existingFields[fieldName] !== undefined) {
             ta.value = existingFields[fieldName];
         }
     });
+    card.appendChild(cardBody);
+    container.appendChild(card);
 }
 
 function attachEditMedia(btn) {

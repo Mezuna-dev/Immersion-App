@@ -180,7 +180,8 @@ body {
     font-size: 2.5rem;
     border-bottom: 3px solid var(--accent);
     padding-bottom: 1rem;
-    display: inline-block;
+    display: block;
+    width: fit-content;
     animation: fadeIn 0.5s ease;
 }
 
@@ -334,4 +335,65 @@ body {
 .browse-badge-new {
     background-color: #4a90d9;
     color: white;
+}
+
+/* === Deck Settings === */
+.settings-card {
+    background-color: #2d2a3e !important;
+    border: 1px solid #3d3a50 !important;
+    border-top: 3px solid var(--accent) !important;
+    border-radius: 10px;
+}
+
+.settings-danger-zone {
+    border-top-color: #e74c3c !important;
+}
+
+.settings-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #bbb;
+    border-bottom: 1px solid #3d3a50;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.settings-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+    display: block;
+}
+
+.settings-input {
+    background-color: #1e1b2e !important;
+    color: #fff !important;
+    border: 1px solid #4a4060 !important;
+    font-size: 1rem !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 0.15rem rgba(144, 103, 198, 0.25) !important;
+    outline: none;
+}
+
+.settings-input::placeholder {
+    color: #665e80 !important;
+}
+
+.settings-select option {
+    background-color: #1e1b2e;
+    color: #fff;
+}
+
+.settings-hint {
+    display: block;
+    color: #888;
+    font-size: 0.78rem;
+    margin-top: 0.35rem;
+    line-height: 1.4;
 }

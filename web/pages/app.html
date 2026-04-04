@@ -136,31 +136,35 @@
 
                 <!-- SRS View -->
                 <div id="srs-view" class="view-section view-hidden text-white">
-                    <row class="">
-                    <h1 class="mb-4">Decks</h1>
-                    <a href="#" class="btn btn-dark btn-accent" onclick="showView('create-deck')" style="margin-left: 2rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Create Deck</a>
-                    <a href="#" class="btn btn-dark btn-accent" onclick="importDeck()" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Import Deck</a>
-                    <a href="#" class="btn btn-dark btn-accent" onclick="showCreateCard()" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Create Card</a>
-                    <a href="#" class="btn btn-dark btn-accent" onclick="showView('card-types')" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Card Types</a>
-                    <a href="#" class="btn btn-dark btn-accent" onclick="showView('card-browser')" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Browse</a>
-                    </row>
+                    <h1 class="mb-3">Decks</h1>
+                    <div class="d-flex flex-wrap mb-4" style="gap: 0.5rem;">
+                        <a href="#" class="btn btn-dark btn-accent" onclick="showView('create-deck')">Create Deck</a>
+                        <a href="#" class="btn btn-dark btn-accent" onclick="importDeck()">Import Deck</a>
+                        <a href="#" class="btn btn-dark btn-accent" onclick="showCreateCard()">Create Card</a>
+                        <a href="#" class="btn btn-dark btn-accent" onclick="showView('card-types')">Card Types</a>
+                        <a href="#" class="btn btn-dark btn-accent" onclick="showView('card-browser')">Browse</a>
+                    </div>
                     <div id="deck-list"></div>
                 </div>
 
 
                 <!-- Create Deck View -->
                 <div id="create-deck-view" class="view-section view-hidden text-white">
+                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
                     <h1 class="mb-4">Create Deck</h1>
-                    <row class="mb-4">
-                        <div class="form-group">
-                            <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="deck-name">Deck Name</label>
-                            <input type="text" class="form-control" id="deck-name" placeholder="Enter deck name" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%;">
-                            <label class="form-label h2" style="margin-top: 1rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="deck-description">Deck Description</label>
-                            <textarea class="form-control" id="deck-description" placeholder="Enter deck description (optional)" style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease; width: 50%; height: 150px;"></textarea>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">General</h2>
+                            <label class="form-label settings-label" for="deck-name">Deck Name</label>
+                            <input type="text" class="form-control settings-input" id="deck-name" placeholder="Enter deck name">
+                            <label class="form-label settings-label" for="deck-description" style="margin-top: 1.25rem;">Description</label>
+                            <textarea class="form-control settings-input" id="deck-description" placeholder="Optional" style="height: 120px; resize: vertical;"></textarea>
                         </div>
-                    </row>
-                    <button class="btn btn-dark btn-accent" onclick="createDeck()" style="width: 10rem; height: 3rem; margin-top: 1.5rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
-                    <button class="btn btn-dark btn-accent" onclick="showView('srs')" style="width: 10rem; height: 3rem; margin-left: 1rem; margin-top: 1.5rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
+                    <div class="d-flex" style="gap: 0.75rem;">
+                        <button class="btn btn-dark btn-accent" onclick="createDeck()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Confirm</button>
+                        <button class="btn btn-dark" onclick="showView('srs')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Cancel</button>
+                    </div>
                 </div>
 
                 <!-- Deck Details View -->
@@ -170,151 +174,177 @@
 
                 <!-- Deck Settings View -->
                 <div id="deck-settings-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;"><span id="settings-deck-name"></span> — Settings</h1>
-                    <div class="card mb-4 btn-accent" style="width: 50%; animation: fadeIn 0.6s ease;">
+                    <button class="btn btn-dark mb-3" onclick="showView('deck-details')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <h1 class="mb-4"><span id="settings-deck-name"></span> — Settings</h1>
+                    <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">General</h2></div>
-                            <label class="form-label" for="settings-deck-name-input" style="font-size: 1rem;">Deck name</label>
-                            <input type="text" class="form-control" id="settings-deck-name-input"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 100%;">
-                            <label class="form-label d-block" for="settings-deck-description-input" style="font-size: 1rem; margin-top: 1.25rem;">Description</label>
-                            <textarea class="form-control" id="settings-deck-description-input" placeholder="Enter deck description (optional)"
-                                      style="color: black; border: none; font-size: 115%; background-color: white; width: 100%; height: 100px; resize: vertical;"></textarea>
+                            <h2 class="settings-section-title">General</h2>
+                            <label class="form-label settings-label" for="settings-deck-name-input">Deck name</label>
+                            <input type="text" class="form-control settings-input" id="settings-deck-name-input">
+                            <label class="form-label settings-label" for="settings-deck-description-input" style="margin-top: 1.25rem;">Description</label>
+                            <textarea class="form-control settings-input" id="settings-deck-description-input" placeholder="Optional"
+                                      style="height: 80px; resize: vertical;"></textarea>
                         </div>
                     </div>
-                    <div class="card mb-4 btn-accent" style="width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">New Cards</h2></div>
-                            <label class="form-label" for="settings-new-cards-limit" style="font-size: 1rem;">New cards per day</label>
-                            <input type="number" class="form-control" id="settings-new-cards-limit" min="0"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 8rem;">
-                            <label class="form-label d-block" for="settings-learning-steps" style="font-size: 1rem; margin-top: 1.25rem;">Learning steps (minutes)</label>
-                            <input type="text" class="form-control" id="settings-learning-steps" placeholder="e.g. 1 10"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 12rem;">
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Space-separated minutes. New cards repeat through each step before graduating.</small>
+                            <h2 class="settings-section-title">New Cards</h2>
+                            <label class="form-label settings-label" for="settings-new-cards-limit">New cards per day</label>
+                            <input type="number" class="form-control settings-input" id="settings-new-cards-limit" min="0" style="width: 8rem;">
+                            <label class="form-label settings-label" for="settings-learning-steps" style="margin-top: 1.25rem;">Learning steps</label>
+                            <input type="text" class="form-control settings-input" id="settings-learning-steps" placeholder="e.g. 1 10" style="width: 12rem;">
+                            <small class="settings-hint">Space-separated minutes. New cards cycle through each step before graduating to reviews.</small>
                         </div>
                     </div>
-                    <div class="card mb-4 btn-accent" style="width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">Current Cards</h2></div>
-                            <label class="form-label d-block" for="settings-relearning-steps" style="font-size: 1rem;">Relearning steps (minutes)</label>
-                            <input type="text" class="form-control" id="settings-relearning-steps" placeholder="e.g. 10"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 12rem;">
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Space-separated minutes. Cards lapsed during review repeat through each step before returning to scheduling.</small>
+                            <h2 class="settings-section-title">Lapsed Cards</h2>
+                            <label class="form-label settings-label" for="settings-relearning-steps">Relearning steps</label>
+                            <input type="text" class="form-control settings-input" id="settings-relearning-steps" placeholder="e.g. 10" style="width: 12rem;">
+                            <small class="settings-hint">Space-separated minutes. Cards failed during review cycle through these steps before returning to scheduling.</small>
                         </div>
                     </div>
-                    <div class="card mb-4 btn-accent" style="width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3"><h2 class="card-title mb-0" style="border-bottom: 3px solid #2d2a3e; padding-bottom: 0.5rem; display: inline-block;">Order</h2></div>
-                            <label class="form-label" for="settings-study-order" style="font-size: 1rem;">Card study order</label>
-                            <select class="form-control" id="settings-study-order"
-                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 20rem;">
+                            <h2 class="settings-section-title">Study Order</h2>
+                            <label class="form-label settings-label" for="settings-study-order">New card placement</label>
+                            <select class="form-control settings-input settings-select" id="settings-study-order">
                                 <option value="new_first">New cards before reviews</option>
                                 <option value="new_last">New cards after reviews</option>
                                 <option value="mix">Mix with reviews</option>
                             </select>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Controls when new cards appear relative to due reviews during a study session.</small>
-                            <label class="form-label d-block" for="settings-answer-display" style="font-size: 1rem; margin-top: 1.25rem;">Answer display</label>
-                            <select class="form-control" id="settings-answer-display"
-                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 20rem;">
+                            <small class="settings-hint">Controls when new cards appear relative to due reviews in a session.</small>
+                            <label class="form-label settings-label" for="settings-answer-display" style="margin-top: 1.25rem;">Answer display</label>
+                            <select class="form-control settings-input settings-select" id="settings-answer-display">
                                 <option value="replace">Replace front with back</option>
                                 <option value="show_below">Show back below front</option>
                             </select>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Whether the answer replaces the question or appears below it.</small>
+                            <small class="settings-hint">How the answer is shown when you flip a card.</small>
                         </div>
                     </div>
-                    <div class="mt-3">
+                    <div class="card mb-4 settings-card settings-danger-zone" style="max-width: 560px; animation: fadeIn 0.6s ease;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title" style="color: #e74c3c;">Danger Zone</h2>
+                            <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 0.75rem;">Permanently delete this deck and all its cards. This cannot be undone.</p>
+                            <button class="btn btn-danger" onclick="deleteDeckFromSettings()" style="font-weight: 600;">Delete Deck</button>
+                        </div>
+                    </div>
+                    <div class="mt-1 mb-4 d-flex" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="saveDeckSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark btn-accent" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; margin-left: 1rem; font-size: large; font-weight: 600;">Cancel</button>
+                        <button class="btn btn-dark" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
                     </div>
                 </div>
 
                 <!-- Card Types View -->
                 <div id="card-types-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Card Types</h1>
-                    <a href="#" class="btn btn-dark btn-accent" onclick="showView('create-card-type')" style="animation: fadeIn 0.6s ease; margin-left: 2rem; margin-top: .5rem;">Create Card Type</a>
-                    <div id="card-type-list" class="mt-4"></div>
+                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <div class="d-flex align-items-center justify-content-between mb-4" style="flex-wrap: wrap; gap: 1rem;">
+                        <h1 class="mb-0">Card Types</h1>
+                        <a href="#" class="btn btn-dark btn-accent" onclick="showView('create-card-type')">Create Card Type</a>
+                    </div>
+                    <div id="card-type-list"></div>
                 </div>
 
                 <!-- Create Card Type View -->
                 <div id="create-card-type-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Create Card Type</h1>
-                    <div class="form-group" style="width: 50%;">
-                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-type-name">Type Name</label>
-                        <input type="text" class="form-control" id="card-type-name" placeholder="e.g. Japanese"
-                               style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease;">
-                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;">Fields</label>
-                        <div id="card-type-fields-list"></div>
-                        <button class="btn btn-dark btn-accent mt-2" onclick="addCardTypeField()" style="animation: fadeIn 0.6s ease;">+ Add Field</button>
-                        <div class="mt-4">
-                            <label class="form-label h2" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;">Styling <span style="font-size: 1rem; font-weight: 400; opacity: 0.7;">(optional)</span></label>
-                            <label class="form-label d-block" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="card-type-front-style">Front Template</label>
-                            <textarea class="form-control" id="card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="card-type-back-style">Back Template</label>
-                            <textarea class="form-control" id="card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="card-type-css-style">CSS</label>
-                            <textarea class="form-control" id="card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
-                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                    <button class="btn btn-dark mb-3" onclick="showView('card-types')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <h1 class="mb-4">Create Card Type</h1>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">General</h2>
+                            <label class="form-label settings-label" for="card-type-name">Type Name</label>
+                            <input type="text" class="form-control settings-input" id="card-type-name" placeholder="e.g. Japanese">
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Fields</h2>
+                            <div id="card-type-fields-list"></div>
+                            <button class="btn btn-dark btn-accent mt-2" onclick="addCardTypeField()">+ Add Field</button>
+                        </div>
+                    </div>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Styling <span style="font-size: 0.8rem; font-weight: 400; opacity: 0.6; text-transform: none; letter-spacing: 0;">optional</span></h2>
+                            <label class="form-label settings-label" for="card-type-front-style">Front Template</label>
+                            <textarea class="form-control settings-input" id="card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label" for="card-type-back-style" style="margin-top: 1rem;">Back Template</label>
+                            <textarea class="form-control settings-input" id="card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label" for="card-type-css-style" style="margin-top: 1rem;">CSS</label>
+                            <textarea class="form-control settings-input" id="card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
+                                      style="font-family: monospace; height: 100px;"></textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex mb-4" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="submitCreateCardType()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Confirm</button>
-                        <button class="btn btn-dark btn-accent" onclick="showView('card-types')" style="width: 10rem; height: 3rem; margin-left: 1rem; font-size: large; font-weight: 600;">Cancel</button>
+                        <button class="btn btn-dark" onclick="showView('card-types')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Cancel</button>
                     </div>
                 </div>
 
                 <!-- Edit Card Type View -->
                 <div id="edit-card-type-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Edit Card Type</h1>
-                    <div class="form-group" style="width: 50%;">
-                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="edit-card-type-name">Type Name</label>
-                        <input type="text" class="form-control" id="edit-card-type-name" placeholder="e.g. Japanese"
-                               style="color: black; border: none; font-size: 150%; background-color: white; animation: fadeIn 0.6s ease;">
-                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;">Fields</label>
-                        <div id="edit-card-type-fields-list"></div>
-                        <button class="btn btn-dark btn-accent mt-2" onclick="addEditCardTypeField()" style="animation: fadeIn 0.6s ease;">+ Add Field</button>
-                        <div class="mt-4">
-                            <label class="form-label h2" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;">Styling <span style="font-size: 1rem; font-weight: 400; opacity: 0.7;">(optional)</span></label>
-                            <label class="form-label d-block" style="margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="edit-card-type-front-style">Front Template</label>
-                            <textarea class="form-control" id="edit-card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="edit-card-type-back-style">Back Template</label>
-                            <textarea class="form-control" id="edit-card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label d-block" style="margin-top: 1rem; margin-bottom: 0.5rem; animation: fadeIn 0.6s ease;" for="edit-card-type-css-style">CSS</label>
-                            <textarea class="form-control" id="edit-card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
-                                      style="color: black; border: none; background-color: white; animation: fadeIn 0.6s ease; font-family: monospace; height: 100px;"></textarea>
+                    <button class="btn btn-dark mb-3" onclick="showView('card-types')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <h1 class="mb-4">Edit Card Type</h1>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">General</h2>
+                            <label class="form-label settings-label" for="edit-card-type-name">Type Name</label>
+                            <input type="text" class="form-control settings-input" id="edit-card-type-name" placeholder="e.g. Japanese">
                         </div>
                     </div>
-                    <div class="mt-4">
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Fields</h2>
+                            <div id="edit-card-type-fields-list"></div>
+                            <button class="btn btn-dark btn-accent mt-2" onclick="addEditCardTypeField()">+ Add Field</button>
+                        </div>
+                    </div>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Styling <span style="font-size: 0.8rem; font-weight: 400; opacity: 0.6; text-transform: none; letter-spacing: 0;">optional</span></h2>
+                            <label class="form-label settings-label" for="edit-card-type-front-style">Front Template</label>
+                            <textarea class="form-control settings-input" id="edit-card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label" for="edit-card-type-back-style" style="margin-top: 1rem;">Back Template</label>
+                            <textarea class="form-control settings-input" id="edit-card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
+                                      style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label" for="edit-card-type-css-style" style="margin-top: 1rem;">CSS</label>
+                            <textarea class="form-control settings-input" id="edit-card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
+                                      style="font-family: monospace; height: 100px;"></textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex mb-4" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="submitEditCardType()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark btn-accent" onclick="showView('card-types')" style="width: 10rem; height: 3rem; margin-left: 1rem; font-size: large; font-weight: 600;">Cancel</button>
+                        <button class="btn btn-dark" onclick="showView('card-types')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
                     </div>
                 </div>
 
                 <!-- Create Card View -->
                 <div id="create-card-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Create New Card</h1>
-                    <div class="form-group" style="width: 50%;">
-                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-deck-select">Deck</label>
-                        <select class="form-control" id="card-deck-select"
-                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
-                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="card-type-select">Card Type</label>
-                        <select class="form-control" id="card-type-select" onchange="renderCardFields(this.value)"
-                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
-                        <div id="card-fields-container" class="mt-3"></div>
+                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <h1 class="mb-4">Create New Card</h1>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Card Details</h2>
+                            <label class="form-label settings-label" for="card-deck-select">Deck</label>
+                            <select class="form-control settings-input settings-select" id="card-deck-select"></select>
+                            <label class="form-label settings-label" for="card-type-select" style="margin-top: 1.25rem;">Card Type</label>
+                            <select class="form-control settings-input settings-select" id="card-type-select" onchange="renderCardFields(this.value)"></select>
+                        </div>
                     </div>
-                    <div class="mt-4">
-                        <button class="btn btn-dark btn-accent" onclick="createCard()" style="width: 10rem; height: 3rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
-                        <button class="btn btn-dark btn-accent" onclick="showView('srs')" style="width: 10rem; height: 3rem; margin-left: 1rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                    <div id="card-fields-container"></div>
+                    <div class="d-flex mb-4" style="gap: 0.75rem;">
+                        <button class="btn btn-dark btn-accent" onclick="createCard()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Confirm</button>
+                        <button class="btn btn-dark" onclick="showView('srs')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Cancel</button>
                     </div>
                 </div>
 
                 <!-- Card Browser View -->
                 <div id="card-browser-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Card Browser</h1>
+                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <h1 class="mb-4">Card Browser</h1>
                     <div class="d-flex gap-3 mb-4 flex-wrap align-items-end" style="animation: fadeIn 0.6s ease;">
                         <div>
                             <label class="form-label" style="font-size: 0.85rem;">Deck</label>
@@ -325,8 +355,8 @@
                         </div>
                         <div style="flex: 1; max-width: 24rem;">
                             <label class="form-label" style="font-size: 0.85rem;">Search</label>
-                            <input type="text" class="form-control" id="browse-search-input" placeholder="Search cards..."
-                                   oninput="debounceBrowseSearch()" style="color: black; border: none; font-size: 1rem; background-color: white;">
+                            <input type="text" class="form-control settings-input" id="browse-search-input" placeholder="Search cards..."
+                                   oninput="debounceBrowseSearch()" style="font-size: 1rem;">
                         </div>
                         <div>
                             <label class="form-label" style="font-size: 0.85rem;">Sort By</label>
@@ -347,37 +377,39 @@
 
                 <!-- Edit Card View -->
                 <div id="edit-card-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Edit Card</h1>
+                    <button class="btn btn-dark mb-3" onclick="showView('card-browser')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <h1 class="mb-4">Edit Card</h1>
                     <input type="hidden" id="edit-card-id">
-                    <div class="form-group" style="width: 50%;">
-                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="edit-card-deck-select">Deck</label>
-                        <select class="form-control" id="edit-card-deck-select"
-                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
-                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="edit-card-type-select">Card Type</label>
-                        <select class="form-control" id="edit-card-type-select" onchange="renderEditCardFields(this.value)"
-                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
-                        <div id="edit-card-fields-container" class="mt-3"></div>
-
-                        <div class="card mt-4 mb-3" style="background-color: #2d2a3e; animation: fadeIn 0.6s ease;">
-                            <div class="card-body text-white" style="font-size: 0.85rem;">
-                                <div class="mb-2"><span style="color:#888;">Status:</span> <span id="edit-card-status">—</span></div>
-                                <div class="d-flex flex-wrap gap-4">
-                                    <div><span style="color:#888;">Reps:</span> <span id="edit-card-reps">—</span></div>
-                                    <div><span style="color:#888;">Interval:</span> <span id="edit-card-interval">—</span> days</div>
-                                    <div><span style="color:#888;">Ease:</span> <span id="edit-card-ease">—</span></div>
-                                    <div><span style="color:#888;">Due:</span> <span id="edit-card-due">—</span></div>
-                                </div>
-                                <div class="d-flex flex-wrap gap-4 mt-2">
-                                    <div><span style="color:#888;">Created:</span> <span id="edit-card-created">—</span></div>
-                                    <div><span style="color:#888;">Last Reviewed:</span> <span id="edit-card-last-reviewed">—</span></div>
-                                </div>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Card Details</h2>
+                            <label class="form-label settings-label" for="edit-card-deck-select">Deck</label>
+                            <select class="form-control settings-input settings-select" id="edit-card-deck-select"></select>
+                            <label class="form-label settings-label" for="edit-card-type-select" style="margin-top: 1.25rem;">Card Type</label>
+                            <select class="form-control settings-input settings-select" id="edit-card-type-select" onchange="renderEditCardFields(this.value)"></select>
+                        </div>
+                    </div>
+                    <div id="edit-card-fields-container"></div>
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white" style="font-size: 0.85rem;">
+                            <h2 class="settings-section-title">Scheduling Info</h2>
+                            <div class="mb-2"><span style="color:#888;">Status:</span> <span id="edit-card-status">—</span></div>
+                            <div class="d-flex flex-wrap gap-4">
+                                <div><span style="color:#888;">Reps:</span> <span id="edit-card-reps">—</span></div>
+                                <div><span style="color:#888;">Interval:</span> <span id="edit-card-interval">—</span> days</div>
+                                <div><span style="color:#888;">Ease:</span> <span id="edit-card-ease">—</span></div>
+                                <div><span style="color:#888;">Due:</span> <span id="edit-card-due">—</span></div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-4 mt-2">
+                                <div><span style="color:#888;">Created:</span> <span id="edit-card-created">—</span></div>
+                                <div><span style="color:#888;">Last Reviewed:</span> <span id="edit-card-last-reviewed">—</span></div>
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4">
-                        <button class="btn btn-dark btn-accent" onclick="saveEditCard()" style="width: 10rem; height: 3rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark btn-accent" onclick="showView('card-browser')" style="width: 10rem; height: 3rem; margin-left: 1rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
-                        <button class="btn btn-danger" onclick="deleteCardFromEdit()" style="width: 10rem; height: 3rem; margin-left: 1rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Delete</button>
+                    <div class="d-flex mb-4" style="gap: 0.75rem;">
+                        <button class="btn btn-dark btn-accent" onclick="saveEditCard()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
+                        <button class="btn btn-dark" onclick="showView('card-browser')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
+                        <button class="btn btn-danger" onclick="deleteCardFromEdit()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Delete</button>
                     </div>
                 </div>
 
@@ -421,123 +453,96 @@
 
                 <!-- Settings View -->
                 <div id="settings-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Settings</h1>
+                    <h1 class="mb-4">Settings</h1>
 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Appearance</h2>
-                            </div>
-
-                            <label class="form-label" for="settings-accent-color" style="font-size: 1rem;">Accent Color</label>
+                            <h2 class="settings-section-title">Appearance</h2>
+                            <label class="form-label settings-label" for="settings-accent-color">Accent Color</label>
                             <div class="d-flex align-items-center gap-3 mb-1">
                                 <input type="color" id="settings-accent-color" oninput="previewAccent(this.value)"
                                        style="width: 3rem; height: 2.5rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
                                 <span id="settings-accent-hex" style="font-family: monospace; font-size: 1rem;">#9067C6</span>
                             </div>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-bottom: 1.5rem;">Color used for the sidebar, cards, and buttons throughout the app. Preview updates live.</small>
-
-                            <label class="form-label" for="settings-font-size" style="font-size: 1rem;">Review Card Font Size</label>
-                            <select class="form-control" id="settings-font-size"
-                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 14rem;">
+                            <small class="settings-hint" style="margin-bottom: 1.5rem;">Color used for the sidebar, cards, and buttons throughout the app. Preview updates live.</small>
+                            <label class="form-label settings-label" for="settings-font-size" style="margin-top: 1.25rem;">Review Card Font Size</label>
+                            <select class="form-control settings-input settings-select" id="settings-font-size" style="width: 14rem;">
                                 <option value="small">Small</option>
                                 <option value="medium">Medium</option>
                                 <option value="large">Large</option>
                             </select>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Font size for card content during review sessions.</small>
+                            <small class="settings-hint">Font size for card content during review sessions.</small>
                         </div>
                     </div>
-
-                    <div class="mt-3 mb-5">
+                    <div class="d-flex mb-5" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="saveAppSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="resetAppearanceSettings()" style="width: 12rem; height: 3rem; margin-left: 1rem; background-color: #2d2a3e; font-size: large; font-weight: 600;">Reset to Default</button>
+                        <button class="btn btn-dark" onclick="resetAppearanceSettings()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Reset to Default</button>
                     </div>
 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">SRS Defaults</h2>
-                            </div>
-                            <small style="opacity: 0.75; font-size: 0.85rem; display: block; margin-bottom: 1.25rem;">Applied to newly created decks. Existing decks are not affected.</small>
-
-                            <label class="form-label" for="srs-default-new-limit" style="font-size: 1rem;">New cards per day</label>
-                            <input type="number" class="form-control" id="srs-default-new-limit" min="0"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 8rem;">
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem; margin-bottom: 1.25rem;">How many new cards to introduce per day in new decks.</small>
-
-                            <label class="form-label" for="srs-default-learning-steps" style="font-size: 1rem;">Learning steps (minutes)</label>
-                            <input type="text" class="form-control" id="srs-default-learning-steps" placeholder="e.g. 1 10"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 12rem;">
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem; margin-bottom: 1.25rem;">Space-separated minutes for new card learning steps.</small>
-
-                            <label class="form-label" for="srs-default-relearning-steps" style="font-size: 1rem;">Relearning steps (minutes)</label>
-                            <input type="text" class="form-control" id="srs-default-relearning-steps" placeholder="e.g. 10"
-                                   style="color: black; border: none; font-size: 130%; background-color: white; width: 12rem;">
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem; margin-bottom: 1.25rem;">Space-separated minutes for lapsed card relearning steps.</small>
-
-                            <label class="form-label" for="srs-default-study-order" style="font-size: 1rem;">Card study order</label>
-                            <select class="form-control" id="srs-default-study-order"
-                                    style="color: black; border: none; font-size: 130%; background-color: white; width: 20rem;">
+                            <h2 class="settings-section-title">SRS Defaults</h2>
+                            <small class="settings-hint" style="margin-bottom: 1.25rem; display: block;">Applied to newly created decks. Existing decks are not affected.</small>
+                            <label class="form-label settings-label" for="srs-default-new-limit">New cards per day</label>
+                            <input type="number" class="form-control settings-input" id="srs-default-new-limit" min="0" style="width: 8rem;">
+                            <small class="settings-hint">How many new cards to introduce per day in new decks.</small>
+                            <label class="form-label settings-label" for="srs-default-learning-steps" style="margin-top: 1.25rem;">Learning steps</label>
+                            <input type="text" class="form-control settings-input" id="srs-default-learning-steps" placeholder="e.g. 1 10" style="width: 12rem;">
+                            <small class="settings-hint">Space-separated minutes for new card learning steps.</small>
+                            <label class="form-label settings-label" for="srs-default-relearning-steps" style="margin-top: 1.25rem;">Relearning steps</label>
+                            <input type="text" class="form-control settings-input" id="srs-default-relearning-steps" placeholder="e.g. 10" style="width: 12rem;">
+                            <small class="settings-hint">Space-separated minutes for lapsed card relearning steps.</small>
+                            <label class="form-label settings-label" for="srs-default-study-order" style="margin-top: 1.25rem;">Card study order</label>
+                            <select class="form-control settings-input settings-select" id="srs-default-study-order" style="width: 20rem;">
                                 <option value="new_first">New cards before reviews</option>
                                 <option value="new_last">New cards after reviews</option>
                                 <option value="mix">Mix with reviews</option>
                             </select>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-top: 0.35rem;">Order in which new cards appear relative to due reviews.</small>
+                            <small class="settings-hint">Order in which new cards appear relative to due reviews.</small>
                         </div>
                     </div>
-
-                    <div class="mt-3 mb-5">
+                    <div class="d-flex mb-5" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="saveAppSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="resetSRSDefaults()" style="width: 12rem; height: 3rem; margin-left: 1rem; background-color: #2d2a3e; font-size: large; font-weight: 600;">Reset to Default</button>
+                        <button class="btn btn-dark" onclick="resetSRSDefaults()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Reset to Default</button>
                     </div>
 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Review Behavior</h2>
-                            </div>
-
+                            <h2 class="settings-section-title">Review Behavior</h2>
                             <div class="form-check form-switch mb-1">
                                 <input class="form-check-input" type="checkbox" id="review-autoplay-audio" style="cursor: pointer;">
-                                <label class="form-check-label" for="review-autoplay-audio" style="font-size: 1rem; cursor: pointer;">Auto-play audio</label>
+                                <label class="form-check-label settings-label" for="review-autoplay-audio" style="cursor: pointer;">Auto-play audio</label>
                             </div>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-bottom: 1.5rem;">Automatically play audio fields when a card or its answer is shown.</small>
-
+                            <small class="settings-hint" style="margin-bottom: 1.5rem; display: block;">Automatically play audio fields when a card or its answer is shown.</small>
                             <div class="form-check form-switch mb-1">
                                 <input class="form-check-input" type="checkbox" id="review-shortcut-enabled" style="cursor: pointer;">
-                                <label class="form-check-label" for="review-shortcut-enabled" style="font-size: 1rem; cursor: pointer;">Answer shortcut key</label>
+                                <label class="form-check-label settings-label" for="review-shortcut-enabled" style="cursor: pointer;">Answer shortcut key</label>
                             </div>
-                            <small style="opacity: 0.75; font-size: 0.8rem; display: block; margin-bottom: 0.75rem;">Press the shortcut to show the answer, press again to rate Good.</small>
+                            <small class="settings-hint" style="margin-bottom: 0.75rem; display: block;">Press the shortcut to show the answer, press again to rate Good.</small>
                             <div class="d-flex align-items-center gap-3">
                                 <button id="shortcut-key-btn" onclick="startKeyCapture()"
-                                        style="padding: 5px 18px; background: white; color: black; border: none; border-radius: 6px; cursor: pointer; font-family: monospace; font-size: 1.1rem; min-width: 7rem; text-align: center;">Space</button>
-                                <small style="opacity: 0.75; font-size: 0.8rem;">Click to change &mdash; press Escape to cancel</small>
+                                        style="padding: 5px 18px; background-color: #1e1b2e; color: white; border: 1px solid #4a4060; border-radius: 6px; cursor: pointer; font-family: monospace; font-size: 1.1rem; min-width: 7rem; text-align: center;">Space</button>
+                                <small class="settings-hint">Click to change &mdash; press Escape to cancel</small>
                             </div>
                         </div>
                     </div>
-
-                    <div class="mt-3 mb-5">
+                    <div class="d-flex mb-5" style="gap: 0.75rem;">
                         <button class="btn btn-dark btn-accent" onclick="saveAppSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="resetReviewBehavior()" style="width: 12rem; height: 3rem; margin-left: 1rem; background-color: #2d2a3e; font-size: large; font-weight: 600;">Reset to Default</button>
+                        <button class="btn btn-dark" onclick="resetReviewBehavior()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Reset to Default</button>
                     </div>
 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.6s ease;">
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Data &amp; Storage</h2>
-                            </div>
-
-                            <p class="mb-0" style="font-size: 0.85rem; opacity: 0.75;">Database location</p>
+                            <h2 class="settings-section-title">Data &amp; Storage</h2>
+                            <p class="mb-0 settings-hint">Database location</p>
                             <div class="d-flex align-items-center gap-2 mb-1">
                                 <code id="data-db-path" style="font-size: 0.8rem; word-break: break-all; opacity: 0.9;">—</code>
                             </div>
                             <div class="d-flex align-items-center gap-3 mb-4">
                                 <small id="data-db-size" style="opacity: 0.6;">—</small>
-                                <button class="btn btn-dark btn-sm" onclick="if(bridge) bridge.openDataFolder()" style="background-color: #3d3a55; font-size: 0.8rem;">Open Folder</button>
+                                <button class="btn btn-dark btn-sm" onclick="if(bridge) bridge.openDataFolder()" style="background-color: #3a3555; font-size: 0.8rem;">Open Folder</button>
                             </div>
-
                             <p id="data-stats" style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 1.5rem;">—</p>
-
                             <div class="d-flex gap-3 flex-wrap">
                                 <button class="btn btn-dark btn-accent" onclick="if(bridge) bridge.exportData()" style="font-size: 0.95rem; font-weight: 600;">Export All Data</button>
                                 <button class="btn btn-dark" onclick="showConfirm('Clear all review history? Card scheduling will not be affected.', function(){ if(bridge){ bridge.clearReviewHistory(); } })" style="background-color: #c0392b; font-size: 0.95rem; font-weight: 600;">Clear Review History</button>

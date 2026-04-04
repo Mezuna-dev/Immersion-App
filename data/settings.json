@@ -1,0 +1,11 @@
+{
+  "accent_color": "#aa00ff",
+  "font_size": "medium",
+  "default_new_cards_limit": 15,
+  "default_learning_steps": "1 10",
+  "default_relearning_steps": "10",
+  "default_study_order": "new_first",
+  "review_autoplay_audio": true,
+  "review_shortcut_enabled": true,
+  "review_shortcut_key": "Space"
+}
