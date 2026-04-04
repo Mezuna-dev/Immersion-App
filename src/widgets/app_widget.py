@@ -293,6 +293,51 @@ class AppBridge(QObject):
         if card:
             database.create_review(card_id, rating, 0, card.ease_factor)
 
+    @pyqtSlot(str, str)
+    def browseCards(self, deck_id_str, search_query):
+        deck_id = int(deck_id_str) if deck_id_str and deck_id_str != '0' else None
+        sq = search_query.strip() if search_query else None
+        cards = database.browse_cards(deck_id=deck_id, search_query=sq)
+        payload = json.dumps(cards)
+        self.web_view.page().runJavaScript(f'updateBrowseCards({payload});')
+
+    @pyqtSlot(int, int, int, str, str, str)
+    def updateCard(self, card_id, deck_id, card_type_id, fields_json, front, back):
+        database.update_card_fields(card_id, deck_id, card_type_id, fields_json, front, back)
+
+    @pyqtSlot(int)
+    def deleteCardFromBrowser(self, card_id):
+        database.delete_card(card_id)
+
+    @pyqtSlot(int)
+    def getCardForEdit(self, card_id):
+        con = database.create_db_connection()
+        cur = con.cursor()
+        cur.execute("""
+            SELECT c.ID, c.Deck_ID, c.Card_Front, c.Card_Back, c.Card_Type_ID, c.Fields,
+                   c.Reps, c.Ease_Factor, c.Interval, c.Due_Date, c.Is_New, c.Date_Created, c.Last_Reviewed
+            FROM Card c WHERE c.ID = ?
+        """, (card_id,))
+        row = cur.fetchone()
+        con.close()
+        if not row:
+            return
+        card_data = {
+            'id': row[0], 'deck_id': row[1], 'front': row[2], 'back': row[3],
+            'card_type_id': row[4], 'fields': row[5],
+            'reps': row[6], 'ease_factor': round(row[7], 2), 'interval': row[8],
+            'due_date': row[9], 'is_new': bool(row[10]), 'date_created': row[11], 'last_reviewed': row[12],
+        }
+        # Bundle card types to avoid race condition
+        card_types = database.get_all_card_types()
+        ct_list = [{
+            'id': ct.id, 'name': ct.name, 'fields': ct.fields,
+            'is_default': ct.is_default, 'front_style': ct.front_style,
+            'back_style': ct.back_style, 'css_style': ct.css_style
+        } for ct in card_types]
+        payload = json.dumps({'card': card_data, 'card_types': ct_list})
+        self.web_view.page().runJavaScript(f'loadCardForEdit({payload});')
+
     @pyqtSlot(int, int)
     def submitRating(self, card_id, rating):
         card = database.get_card_by_id(card_id)

@@ -142,6 +142,7 @@
                     <a href="#" class="btn btn-dark btn-accent" onclick="importDeck()" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Import Deck</a>
                     <a href="#" class="btn btn-dark btn-accent" onclick="showCreateCard()" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Create Card</a>
                     <a href="#" class="btn btn-dark btn-accent" onclick="showView('card-types')" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Card Types</a>
+                    <a href="#" class="btn btn-dark btn-accent" onclick="showView('card-browser')" style="margin-left: 1rem; margin-top: .5rem; animation: fadeIn 0.6s ease;">Browse</a>
                     </row>
                     <div id="deck-list"></div>
                 </div>
@@ -308,6 +309,63 @@
                     <div class="mt-4">
                         <button class="btn btn-dark btn-accent" onclick="createCard()" style="width: 10rem; height: 3rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Confirm</button>
                         <button class="btn btn-dark btn-accent" onclick="showView('srs')" style="width: 10rem; height: 3rem; margin-left: 1rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Card Browser View -->
+                <div id="card-browser-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Card Browser</h1>
+                    <div class="d-flex gap-3 mb-4 flex-wrap align-items-end" style="animation: fadeIn 0.6s ease;">
+                        <div>
+                            <label class="form-label" style="font-size: 0.85rem;">Deck</label>
+                            <select class="form-control dash-select" id="browse-deck-select" onchange="fetchBrowseCards()"
+                                    style="width: 14rem; font-size: 1rem;">
+                                <option value="0">All Decks</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; max-width: 24rem;">
+                            <label class="form-label" style="font-size: 0.85rem;">Search</label>
+                            <input type="text" class="form-control" id="browse-search-input" placeholder="Search cards..."
+                                   oninput="debounceBrowseSearch()" style="color: black; border: none; font-size: 1rem; background-color: white;">
+                        </div>
+                    </div>
+                    <div id="browse-card-count" style="font-size: 0.85rem; color: #888; margin-bottom: 0.75rem; animation: fadeIn 0.6s ease;"></div>
+                    <div id="browse-card-list" style="animation: fadeIn 0.6s ease;"></div>
+                </div>
+
+                <!-- Edit Card View -->
+                <div id="edit-card-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Edit Card</h1>
+                    <input type="hidden" id="edit-card-id">
+                    <div class="form-group" style="width: 50%;">
+                        <label class="form-label h2" style="margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="edit-card-deck-select">Deck</label>
+                        <select class="form-control" id="edit-card-deck-select"
+                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
+                        <label class="form-label h2" style="margin-top: 1.5rem; margin-bottom: 1rem; animation: fadeIn 0.6s ease;" for="edit-card-type-select">Card Type</label>
+                        <select class="form-control" id="edit-card-type-select" onchange="renderEditCardFields(this.value)"
+                                style="color: black; font-size: 130%; background-color: white; border: none; animation: fadeIn 0.6s ease;"></select>
+                        <div id="edit-card-fields-container" class="mt-3"></div>
+
+                        <div class="card mt-4 mb-3" style="background-color: #2d2a3e; animation: fadeIn 0.6s ease;">
+                            <div class="card-body text-white" style="font-size: 0.85rem;">
+                                <div class="mb-2"><span style="color:#888;">Status:</span> <span id="edit-card-status">—</span></div>
+                                <div class="d-flex flex-wrap gap-4">
+                                    <div><span style="color:#888;">Reps:</span> <span id="edit-card-reps">—</span></div>
+                                    <div><span style="color:#888;">Interval:</span> <span id="edit-card-interval">—</span> days</div>
+                                    <div><span style="color:#888;">Ease:</span> <span id="edit-card-ease">—</span></div>
+                                    <div><span style="color:#888;">Due:</span> <span id="edit-card-due">—</span></div>
+                                </div>
+                                <div class="d-flex flex-wrap gap-4 mt-2">
+                                    <div><span style="color:#888;">Created:</span> <span id="edit-card-created">—</span></div>
+                                    <div><span style="color:#888;">Last Reviewed:</span> <span id="edit-card-last-reviewed">—</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-dark btn-accent" onclick="saveEditCard()" style="width: 10rem; height: 3rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Save</button>
+                        <button class="btn btn-dark btn-accent" onclick="showView('card-browser')" style="width: 10rem; height: 3rem; margin-left: 1rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Cancel</button>
+                        <button class="btn btn-danger" onclick="deleteCardFromEdit()" style="width: 10rem; height: 3rem; margin-left: 1rem; animation: fadeIn 0.6s ease; font-size: large; font-weight: 600;">Delete</button>
                     </div>
                 </div>
 

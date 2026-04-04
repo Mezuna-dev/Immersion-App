@@ -198,6 +198,14 @@ function showView(viewId) {
     if (viewId === 'settings') { showAppSettings(); if (bridge) bridge.getDataInfo(); }
     if (viewId === 'card-types' && bridge) bridge.getCardTypes();
     if (viewId === 'create-card-type') initCreateCardTypeView();
+    if (viewId === 'card-browser') {
+        populateBrowseDeckSelect();
+        if (bridge) { if (cardTypes.length === 0) bridge.getCardTypes(); }
+        fetchBrowseCards();
+    }
+    if (viewId === 'edit-card' && bridge) {
+        if (cardTypes.length === 0) bridge.getCardTypes();
+    }
     if (viewId === 'create-card' && bridge) {
         if (cardTypes.length === 0) bridge.getCardTypes();
         else updateCardTypes(cardTypes);
@@ -305,8 +313,9 @@ function renderHeatmapSVG(counts) {
 
     var today = new Date();
     today.setHours(0, 0, 0, 0);
-    var startDay = new Date(today);
-    startDay.setDate(today.getDate() - 364);
+    
+    // Calculate the start date for the current year
+    var startDay = new Date(today.getFullYear(), 0, 1); // January 1 of current year
     startDay.setDate(startDay.getDate() - startDay.getDay()); // rewind to Sunday
 
     var svgW = DAY_LABEL_W + WEEKS * (CELL + GAP);
@@ -376,7 +385,8 @@ function renderHeatmapSVG(counts) {
         for (var d = 0; d < 7; d++) {
             var day = new Date(weekStart);
             day.setDate(weekStart.getDate() + d);
-            if (day > today) continue;
+            // Remove the condition that stops at today's date
+            // if (day > today) continue;
 
             var dStr = toDateStr(day);
             var cnt = counts[dStr] || 0;
@@ -1082,4 +1092,269 @@ function createCard() {
         document.querySelectorAll('.card-field-input').forEach(function(ta) { ta.value = ''; });
         showView('srs');
     }
+}
+
+// ===== Card Browser =====
+
+var browseDebounceTimer = null;
+var browseCards = [];
+
+function populateBrowseDeckSelect() {
+    var select = document.getElementById('browse-deck-select');
+    if (!select) return;
+    var prev = select.value;
+    select.innerHTML = '<option value="0">All Decks</option>';
+    decks.forEach(function(deck) {
+        var opt = document.createElement('option');
+        opt.value = deck.id;
+        opt.textContent = deck.name;
+        select.appendChild(opt);
+    });
+    if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
+        select.value = prev;
+    }
+}
+
+function fetchBrowseCards() {
+    if (!bridge) return;
+    var deckSel = document.getElementById('browse-deck-select');
+    var searchInput = document.getElementById('browse-search-input');
+    bridge.browseCards(
+        String(deckSel ? deckSel.value : '0'),
+        searchInput ? searchInput.value : ''
+    );
+}
+
+function debounceBrowseSearch() {
+    if (browseDebounceTimer) clearTimeout(browseDebounceTimer);
+    browseDebounceTimer = setTimeout(fetchBrowseCards, 300);
+}
+
+function stripHtmlTags(html) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+}
+
+function truncate(text, maxLen) {
+    text = stripHtmlTags(text || '');
+    text = text.replace(/\[image:[^\]]+\]/g, '[img]').replace(/\[sound:[^\]]+\]/g, '[audio]');
+    if (text.length > maxLen) return text.substring(0, maxLen) + '...';
+    return text;
+}
+
+function updateBrowseCards(cards) {
+    browseCards = cards;
+    var container = document.getElementById('browse-card-list');
+    var countEl = document.getElementById('browse-card-count');
+    if (!container) return;
+
+    countEl.textContent = cards.length + (cards.length === 1 ? ' card' : ' cards');
+
+    if (cards.length === 0) {
+        container.innerHTML = '<p style="opacity: 0.6;">No cards found.</p>';
+        return;
+    }
+
+    var html = '<table class="browse-table"><thead><tr>' +
+        '<th>Front</th><th>Back</th><th>Deck</th><th>Type</th><th>Due</th><th>Interval</th>' +
+        '</tr></thead><tbody>';
+
+    cards.forEach(function(card) {
+        var frontText = truncate(card.front, 60);
+        var backText = truncate(card.back, 60);
+        var statusBadge = '';
+        if (card.is_new) {
+            statusBadge = ' <span class="browse-badge browse-badge-new">New</span>';
+        }
+        html += '<tr class="browse-row" onclick="editCardFromBrowser(' + card.id + ')">' +
+            '<td>' + frontText + statusBadge + '</td>' +
+            '<td>' + backText + '</td>' +
+            '<td>' + (card.deck_name || '') + '</td>' +
+            '<td>' + (card.type_name || '') + '</td>' +
+            '<td>' + (card.due_date || '—') + '</td>' +
+            '<td>' + (card.interval || 0) + 'd</td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+var editCardData = null; // Store the card being edited
+
+function editCardFromBrowser(cardId) {
+    if (bridge) {
+        bridge.getCardForEdit(cardId);
+    }
+}
+
+function loadCardForEdit(data) {
+    var card = data.card;
+    // Update cardTypes from bundled data to avoid race condition
+    if (data.card_types) {
+        cardTypes = data.card_types;
+    }
+
+    editCardData = card;
+    document.getElementById('edit-card-id').value = card.id;
+
+    // Populate deck select
+    var deckSelect = document.getElementById('edit-card-deck-select');
+    deckSelect.innerHTML = '';
+    decks.forEach(function(deck) {
+        var opt = document.createElement('option');
+        opt.value = deck.id;
+        opt.textContent = deck.name;
+        deckSelect.appendChild(opt);
+    });
+    if (card.deck_id) deckSelect.value = card.deck_id;
+
+    // Populate card type select
+    var typeSelect = document.getElementById('edit-card-type-select');
+    typeSelect.innerHTML = '';
+    cardTypes.forEach(function(ct) {
+        var opt = document.createElement('option');
+        opt.value = ct.id;
+        opt.textContent = ct.name;
+        typeSelect.appendChild(opt);
+    });
+    if (card.card_type_id) typeSelect.value = card.card_type_id;
+
+    // Stats
+    var statusText = card.is_new ? 'New' : (card.interval >= 21 ? 'Mature' : 'Young');
+    document.getElementById('edit-card-status').textContent = statusText;
+    document.getElementById('edit-card-reps').textContent = card.reps || 0;
+    document.getElementById('edit-card-interval').textContent = card.interval || 0;
+    document.getElementById('edit-card-ease').textContent = card.ease_factor || '2.5';
+    document.getElementById('edit-card-due').textContent = card.due_date || '—';
+    document.getElementById('edit-card-created').textContent = card.date_created || '—';
+    document.getElementById('edit-card-last-reviewed').textContent = card.last_reviewed || '—';
+
+    // Parse existing field data
+    var fields = {};
+    if (card.fields) {
+        try { fields = typeof card.fields === 'string' ? JSON.parse(card.fields) : card.fields; }
+        catch(e) { fields = {}; }
+    }
+
+    // If no fields JSON exists, build from front/back
+    var ct = cardTypes.find(function(t) { return String(t.id) === String(card.card_type_id); });
+    if (Object.keys(fields).length === 0 && (card.front || card.back)) {
+        if (ct && ct.fields.length > 0) {
+            fields[ct.fields[0]] = card.front || '';
+            if (ct.fields.length > 1) fields[ct.fields[1]] = card.back || '';
+        }
+    }
+
+    renderEditCardFields(typeSelect.value, fields);
+    showView('edit-card');
+}
+
+function renderEditCardFields(typeId, existingFields) {
+    var container = document.getElementById('edit-card-fields-container');
+    if (!container) return;
+
+    // If called from onchange (no existingFields), preserve current textarea values
+    if (!existingFields) {
+        existingFields = {};
+        document.querySelectorAll('.edit-card-field-input').forEach(function(ta) {
+            existingFields[ta.getAttribute('data-field')] = ta.value;
+        });
+    }
+
+    container.innerHTML = '';
+    var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
+
+    if (!ct) {
+        // No card type found — show raw Front / Back fields
+        var rawFields = [
+            { name: 'Front', value: (existingFields && existingFields['Front']) || (editCardData ? editCardData.front : '') || '' },
+            { name: 'Back', value: (existingFields && existingFields['Back']) || (editCardData ? editCardData.back : '') || '' }
+        ];
+        rawFields.forEach(function(rf) {
+            var wrapper = document.createElement('div');
+            wrapper.className = 'mb-3';
+            wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + rf.name + '</label>' +
+                '<textarea class="form-control edit-card-field-input" data-field="' + rf.name +
+                '" placeholder="Enter ' + rf.name +
+                '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>' +
+                '<div class="mt-1 d-flex gap-2">' +
+                '<button type="button" class="btn btn-dark btn-sm" data-field="' + rf.name + '" data-media="image" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
+                '<button type="button" class="btn btn-dark btn-sm" data-field="' + rf.name + '" data-media="audio" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
+                '</div>';
+            container.appendChild(wrapper);
+            wrapper.querySelector('textarea').value = rf.value;
+        });
+        return;
+    }
+
+    ct.fields.forEach(function(fieldName) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'mb-3';
+        wrapper.innerHTML = '<label class="form-label h4" style="margin-bottom:0.5rem;">' + fieldName + '</label>' +
+            '<textarea class="form-control edit-card-field-input" data-field="' + fieldName +
+            '" placeholder="Enter ' + fieldName +
+            '" style="color:black;border:none;font-size:130%;background-color:white;height:100px;"></textarea>' +
+            '<div class="mt-1 d-flex gap-2">' +
+            '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="image" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
+            '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="audio" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
+            '</div>';
+        container.appendChild(wrapper);
+        var ta = wrapper.querySelector('textarea');
+        if (existingFields && existingFields[fieldName] !== undefined) {
+            ta.value = existingFields[fieldName];
+        }
+    });
+}
+
+function attachEditMedia(btn) {
+    var fieldName = btn.getAttribute('data-field');
+    var mediaType = btn.getAttribute('data-media');
+    if (!bridge) return;
+    bridge.selectMediaFile(mediaType, function(result) {
+        if (result) {
+            var ta = document.querySelector('.edit-card-field-input[data-field="' + fieldName + '"]');
+            if (ta) {
+                if (ta.value && !ta.value.endsWith('\n')) ta.value += '\n';
+                ta.value += result;
+            }
+        }
+    });
+}
+
+function saveEditCard() {
+    var cardId = parseInt(document.getElementById('edit-card-id').value, 10);
+    var deckId = parseInt(document.getElementById('edit-card-deck-select').value, 10);
+    var typeId = parseInt(document.getElementById('edit-card-type-select').value, 10);
+
+    var fieldsObj = {};
+    var hasContent = false;
+    document.querySelectorAll('.edit-card-field-input').forEach(function(ta) {
+        fieldsObj[ta.getAttribute('data-field')] = ta.value.trim();
+        if (ta.value.trim()) hasContent = true;
+    });
+
+    if (!hasContent) { showAlert('Please fill in at least one field.'); return; }
+
+    var ct = cardTypes.find(function(t) { return t.id === typeId; });
+    var fieldValues = ct ? ct.fields.map(function(f) { return fieldsObj[f] || ''; }) : Object.values(fieldsObj);
+    var front = fieldValues[0] || '';
+    var back = fieldValues.length > 1 ? fieldValues.slice(1).join(' / ') : '';
+
+    if (bridge) {
+        bridge.updateCard(cardId, deckId, typeId, JSON.stringify(fieldsObj), front, back);
+        showAlert('Card saved.');
+        showView('card-browser');
+    }
+}
+
+function deleteCardFromEdit() {
+    var cardId = parseInt(document.getElementById('edit-card-id').value, 10);
+    showConfirm('Delete this card? This cannot be undone.', function() {
+        if (bridge) {
+            bridge.deleteCardFromBrowser(cardId);
+            showView('card-browser');
+        }
+    });
 }

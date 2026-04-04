@@ -280,3 +280,58 @@ body {
     border-color: var(--accent) !important;
     box-shadow: 0 0 0 0.15rem rgba(144, 103, 198, 0.25) !important;
 }
+
+/* === Card Browser === */
+.browse-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
+}
+
+.browse-table thead th {
+    background-color: #2d2a3e;
+    color: #aaa;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 2px solid var(--accent);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.browse-table tbody td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid #3a3555;
+    color: #ddd;
+    max-width: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.browse-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.browse-row:hover {
+    background-color: rgba(144, 103, 198, 0.15);
+}
+
+.browse-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-left: 0.35rem;
+    font-weight: 600;
+}
+
+.browse-badge-new {
+    background-color: #4a90d9;
+    color: white;
+}

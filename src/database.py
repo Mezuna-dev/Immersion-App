@@ -460,11 +460,78 @@ def delete_card(card_id):
     con = create_db_connection()
     cur = con.cursor()
 
+    cur.execute("DELETE FROM Review WHERE Card_ID=?", (card_id,))
     cur.execute("""
         DELETE FROM Card
         WHERE ID=?
     """, (card_id,))
 
+    con.commit()
+    con.close()
+
+
+def browse_cards(deck_id=None, search_query=None) -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+
+    query = """
+        SELECT c.ID, c.Deck_ID, c.Card_Front, c.Card_Back, c.Reps,
+               c.Ease_Factor, c.Interval, c.Due_Date, c.Is_New, c.Date_Created,
+               c.Last_Reviewed, c.Card_Type_ID, c.Fields, c.Learning_Step,
+               d.Name AS Deck_Name,
+               COALESCE(ct.Name, '') AS Type_Name
+        FROM Card c
+        LEFT JOIN Deck d ON c.Deck_ID = d.ID
+        LEFT JOIN CardType ct ON c.Card_Type_ID = ct.ID
+        WHERE 1=1
+    """
+    params = []
+
+    if deck_id is not None:
+        query += " AND c.Deck_ID = ?"
+        params.append(deck_id)
+
+    if search_query:
+        query += " AND (c.Card_Front LIKE ? OR c.Card_Back LIKE ? OR c.Fields LIKE ?)"
+        like = f"%{search_query}%"
+        params.extend([like, like, like])
+
+    query += " ORDER BY c.ID DESC"
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    con.close()
+
+    results = []
+    for r in rows:
+        results.append({
+            'id': r[0],
+            'deck_id': r[1],
+            'front': r[2],
+            'back': r[3],
+            'reps': r[4],
+            'ease_factor': round(r[5], 2),
+            'interval': r[6],
+            'due_date': r[7],
+            'is_new': bool(r[8]),
+            'date_created': r[9],
+            'last_reviewed': r[10],
+            'card_type_id': r[11],
+            'fields': r[12],
+            'learning_step': r[13],
+            'deck_name': r[14] or '',
+            'type_name': r[15] or '',
+        })
+    return results
+
+
+def update_card_fields(card_id: int, deck_id: int, card_type_id: int, fields_json: str, front: str, back: str):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card SET Deck_ID = ?, Card_Type_ID = ?, Fields = ?, Card_Front = ?, Card_Back = ?
+        WHERE ID = ?
+    """, (deck_id, card_type_id, fields_json, front, back, card_id))
     con.commit()
     con.close()
 
