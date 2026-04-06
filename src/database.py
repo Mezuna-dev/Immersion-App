@@ -822,8 +822,8 @@ def get_retention_stats(deck_id=None, start_date=None, end_date=None) -> dict:
             SUM(CASE WHEN interval_before > 0 AND interval_before < 21 AND Rating >= 3 THEN 1 ELSE 0 END),
             SUM(CASE WHEN interval_before >= 21 THEN 1 ELSE 0 END),
             SUM(CASE WHEN interval_before >= 21 AND Rating >= 3 THEN 1 ELSE 0 END),
-            COUNT(*),
-            SUM(CASE WHEN Rating >= 3 THEN 1 ELSE 0 END)
+            SUM(CASE WHEN interval_before > 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN interval_before > 0 AND Rating >= 3 THEN 1 ELSE 0 END)
         FROM filtered
     """, params)
 
