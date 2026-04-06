@@ -9,9 +9,16 @@ import models
 # ===========================================================
 
 import sys as _sys
+import os as _os
 if getattr(_sys, 'frozen', False):
-    # Running as a PyInstaller bundle — keep user data next to the .exe
-    BASE_DIR = Path(_sys.executable).resolve().parent
+    if _sys.platform == 'win32':
+        # Windows: keep user data next to the executable
+        BASE_DIR = Path(_sys.executable).resolve().parent
+    else:
+        # Linux/macOS: executable may be inside a read-only AppImage mount;
+        # follow XDG Base Directory spec for user data
+        _xdg = _os.environ.get('XDG_DATA_HOME', '')
+        BASE_DIR = Path(_xdg) / 'ImmersionSuite' if _xdg else Path.home() / '.local' / 'share' / 'ImmersionSuite'
 else:
     BASE_DIR = Path(__file__).resolve().parent.parent
 Path(f"{BASE_DIR}/data").mkdir(parents=True, exist_ok=True)
