@@ -397,3 +397,43 @@ body {
     margin-top: 0.35rem;
     line-height: 1.4;
 }
+
+/* === Formatting Toolbar & Rich Editor === */
+.edit-card-field-input[contenteditable] {
+    min-height: 100px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    cursor: text;
+}
+
+.edit-card-field-input[contenteditable]:empty::before {
+    content: attr(data-placeholder);
+    color: #665e80;
+    pointer-events: none;
+}
+
+.formatting-toolbar {
+    flex-wrap: wrap;
+}
+
+.formatting-btn {
+    color: #ccc !important;
+    border: 1px solid #4a4060 !important;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.formatting-btn:hover {
+    background-color: #4a4060 !important;
+    color: #fff !important;
+}
+
+.formatting-btn:active {
+    background-color: var(--accent) !important;
+    color: #fff !important;
+}
+
+.formatting-btn-active {
+    background-color: var(--accent) !important;
+    color: #fff !important;
+    border-color: var(--accent) !important;
+}

@@ -237,6 +237,13 @@ class AppBridge(QObject):
         tag = 'sound' if file_type == 'audio' else 'image'
         return f'[{tag}:{filename}]'
 
+    @pyqtSlot()
+    def getMediaBaseUrl(self):
+        media_dir = database.BASE_DIR / 'data' / 'media'
+        media_dir.mkdir(parents=True, exist_ok=True)
+        url = QUrl.fromLocalFile(str(media_dir)).toString() + '/'
+        self.web_view.page().runJavaScript(f'mediaBaseUrl = {json.dumps(url)};')
+
     @pyqtSlot(int)
     def startReview(self, deck_id):
         deck = database.get_deck_by_id(deck_id)

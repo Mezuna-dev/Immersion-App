@@ -12,6 +12,7 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge.refreshStats();
     bridge.getAppSettings();
     bridge.getDecks();
+    bridge.getMediaBaseUrl();
 });
 
 function applyAppSettings(settings) {
@@ -185,6 +186,10 @@ function showView(viewId) {
     if (viewId !== 'review') {
         var cssEl = document.getElementById('review-card-css');
         if (cssEl) cssEl.textContent = '';
+    }
+    if (viewId !== 'card-preview') {
+        var previewCssEl = document.getElementById('preview-card-css');
+        if (previewCssEl) previewCssEl.textContent = '';
     }
     if (viewId === 'dashboard' && bridge) {
         bridge.refreshStats();
@@ -1397,15 +1402,168 @@ function loadCardForEdit(data) {
     showView('edit-card');
 }
 
+// --- Formatting toolbar helpers ---
+var HIGHLIGHT_COLOR = '#f5c842';
+
+function applyFormatting(fieldName, command) {
+    var el = document.querySelector('.edit-card-field-input[data-field="' + fieldName + '"]');
+    if (!el) return;
+    el.focus();
+    if (command === 'highlight') {
+        applyHighlight(el);
+    } else if (command === 'removeFormat') {
+        document.execCommand('removeFormat', false, null);
+    } else {
+        document.execCommand(command, false, null);
+    }
+    updateToolbarState(fieldName);
+}
+
+function applyHighlight(el) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    var range = sel.getRangeAt(0);
+
+    // Check if already inside a highlight span
+    var node = sel.anchorNode;
+    var highlightParent = null;
+    while (node && node !== el) {
+        if (node.nodeType === 1 && node.tagName === 'SPAN' && node.getAttribute('data-highlight') === 'true') {
+            highlightParent = node;
+            break;
+        }
+        node = node.parentNode;
+    }
+
+    if (highlightParent) {
+        // Remove highlight: unwrap the span
+        var parent = highlightParent.parentNode;
+        while (highlightParent.firstChild) {
+            parent.insertBefore(highlightParent.firstChild, highlightParent);
+        }
+        parent.removeChild(highlightParent);
+    } else if (!range.collapsed) {
+        // Apply highlight to selection
+        var span = document.createElement('span');
+        span.style.backgroundColor = HIGHLIGHT_COLOR;
+        span.style.color = '#222';
+        span.style.borderRadius = '2px';
+        span.setAttribute('data-highlight', 'true');
+        try {
+            range.surroundContents(span);
+            sel.removeAllRanges();
+            var newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.addRange(newRange);
+        } catch (e) {
+            // surroundContents fails if selection crosses element boundaries
+            // Fall back to extracting and wrapping
+            var fragment = range.extractContents();
+            span.appendChild(fragment);
+            range.insertNode(span);
+            sel.removeAllRanges();
+            var fallbackRange = document.createRange();
+            fallbackRange.selectNodeContents(span);
+            sel.addRange(fallbackRange);
+        }
+    }
+}
+
+function isInsideHighlight(el) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return false;
+    var node = sel.anchorNode;
+    while (node && node !== el) {
+        if (node.nodeType === 1 && node.tagName === 'SPAN' && node.getAttribute('data-highlight') === 'true') {
+            return true;
+        }
+        node = node.parentNode;
+    }
+    return false;
+}
+
+function updateToolbarState(fieldName) {
+    var toolbar = document.querySelector('.formatting-toolbar[data-field="' + fieldName + '"]');
+    if (!toolbar) return;
+    var el = document.querySelector('.edit-card-field-input[data-field="' + fieldName + '"]');
+    toolbar.querySelectorAll('.formatting-btn').forEach(function(btn) {
+        var cmd = btn.getAttribute('data-cmd');
+        if (!cmd || cmd === 'removeFormat') return;
+        var active = false;
+        if (cmd === 'highlight') {
+            active = el ? isInsideHighlight(el) : false;
+        } else {
+            active = document.queryCommandState(cmd);
+        }
+        if (active) {
+            btn.classList.add('formatting-btn-active');
+        } else {
+            btn.classList.remove('formatting-btn-active');
+        }
+    });
+}
+
+function buildFormattingToolbar(fieldName) {
+    var buttons = [
+        { label: 'B', cmd: 'bold', title: 'Bold (Ctrl+B)', style: 'font-weight:bold;' },
+        { label: 'I', cmd: 'italic', title: 'Italic (Ctrl+I)', style: 'font-style:italic;' },
+        { label: 'U', cmd: 'underline', title: 'Underline (Ctrl+U)', style: 'text-decoration:underline;' },
+        { label: 'S', cmd: 'strikeThrough', title: 'Strikethrough (Ctrl+Shift+S)', style: 'text-decoration:line-through;' },
+        { label: 'H', cmd: 'highlight', title: 'Highlight (Ctrl+Shift+H)', style: 'background-color:#f5c842;color:#222;border-radius:2px;' },
+        { label: 'C', cmd: 'removeFormat', title: 'Clear Formatting (Ctrl+Shift+X)', style: 'opacity:0.7;' }
+    ];
+    var escapedField = fieldName.replace(/'/g, "\\'");
+    var html = '<div class="d-flex gap-1 mb-1 formatting-toolbar" data-field="' + fieldName + '">';
+    buttons.forEach(function(b) {
+        html += '<button type="button" class="btn btn-dark btn-sm formatting-btn" ' +
+            'data-cmd="' + b.cmd + '" ' +
+            'title="' + b.title + '" ' +
+            'onmousedown="event.preventDefault(); applyFormatting(\'' + escapedField + '\', \'' + b.cmd + '\')" ' +
+            'style="background-color:#35324a;font-size:0.78rem;min-width:28px;padding:2px 6px;' + b.style + '">' +
+            b.label + '</button>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function setupFormattingShortcuts(editor) {
+    var fieldName = editor.getAttribute('data-field');
+
+    editor.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+            var cmd = null;
+            if (e.key === 'b' && !e.shiftKey) cmd = 'bold';
+            else if (e.key === 'i' && !e.shiftKey) cmd = 'italic';
+            else if (e.key === 'u' && !e.shiftKey) cmd = 'underline';
+            else if (e.key === 'S' || (e.key === 's' && e.shiftKey)) cmd = 'strikeThrough';
+            else if (e.key === 'H' || (e.key === 'h' && e.shiftKey)) cmd = 'highlight';
+            else if (e.key === 'X' || (e.key === 'x' && e.shiftKey)) cmd = 'removeFormat';
+            if (cmd) {
+                e.preventDefault();
+                applyFormatting(fieldName, cmd);
+            }
+        }
+    });
+
+    // Update toolbar state when cursor moves or selection changes
+    editor.addEventListener('keyup', function() { updateToolbarState(fieldName); });
+    editor.addEventListener('mouseup', function() { updateToolbarState(fieldName); });
+    editor.addEventListener('focus', function() { updateToolbarState(fieldName); });
+}
+
+function getEditFieldValue(el) {
+    return el.innerHTML.replace(/<br\s*\/?>\s*$/, '').trim();
+}
+
 function renderEditCardFields(typeId, existingFields) {
     var container = document.getElementById('edit-card-fields-container');
     if (!container) return;
 
-    // If called from onchange (no existingFields), preserve current textarea values
+    // If called from onchange (no existingFields), preserve current field values
     if (!existingFields) {
         existingFields = {};
-        document.querySelectorAll('.edit-card-field-input').forEach(function(ta) {
-            existingFields[ta.getAttribute('data-field')] = ta.value;
+        document.querySelectorAll('.edit-card-field-input').forEach(function(el) {
+            existingFields[el.getAttribute('data-field')] = getEditFieldValue(el);
         });
     }
 
@@ -1431,15 +1589,18 @@ function renderEditCardFields(typeId, existingFields) {
             var wrapper = document.createElement('div');
             wrapper.className = 'mb-3';
             wrapper.innerHTML = '<label class="form-label settings-label">' + rf.name + '</label>' +
-                '<textarea class="form-control settings-input edit-card-field-input" data-field="' + rf.name +
-                '" placeholder="Enter ' + rf.name +
-                '" style="height:100px;"></textarea>' +
+                buildFormattingToolbar(rf.name) +
+                '<div class="form-control settings-input edit-card-field-input" contenteditable="true" data-field="' + rf.name +
+                '" data-placeholder="Enter ' + rf.name +
+                '" style="height:100px;overflow-y:auto;"></div>' +
                 '<div class="mt-1 d-flex gap-2">' +
                 '<button type="button" class="btn btn-dark btn-sm" data-field="' + rf.name + '" data-media="image" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
                 '<button type="button" class="btn btn-dark btn-sm" data-field="' + rf.name + '" data-media="audio" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
                 '</div>';
             rawCardBody.appendChild(wrapper);
-            wrapper.querySelector('textarea').value = rf.value;
+            var editor = wrapper.querySelector('.edit-card-field-input');
+            editor.innerHTML = rf.value;
+            setupFormattingShortcuts(editor);
         });
         rawCard.appendChild(rawCardBody);
         container.appendChild(rawCard);
@@ -1459,18 +1620,20 @@ function renderEditCardFields(typeId, existingFields) {
         var wrapper = document.createElement('div');
         wrapper.className = 'mb-3';
         wrapper.innerHTML = '<label class="form-label settings-label">' + fieldName + '</label>' +
-            '<textarea class="form-control settings-input edit-card-field-input" data-field="' + fieldName +
-            '" placeholder="Enter ' + fieldName +
-            '" style="height:100px;"></textarea>' +
+            buildFormattingToolbar(fieldName) +
+            '<div class="form-control settings-input edit-card-field-input" contenteditable="true" data-field="' + fieldName +
+            '" data-placeholder="Enter ' + fieldName +
+            '" style="height:100px;overflow-y:auto;"></div>' +
             '<div class="mt-1 d-flex gap-2">' +
             '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="image" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">📷 Image</button>' +
             '<button type="button" class="btn btn-dark btn-sm" data-field="' + fieldName + '" data-media="audio" onclick="attachEditMedia(this)" style="background-color:#2d2a3e;font-size:0.8rem;">🔊 Audio</button>' +
             '</div>';
         cardBody.appendChild(wrapper);
-        var ta = wrapper.querySelector('textarea');
+        var editor = wrapper.querySelector('.edit-card-field-input');
         if (existingFields && existingFields[fieldName] !== undefined) {
-            ta.value = existingFields[fieldName];
+            editor.innerHTML = existingFields[fieldName];
         }
+        setupFormattingShortcuts(editor);
     });
     card.appendChild(cardBody);
     container.appendChild(card);
@@ -1482,10 +1645,11 @@ function attachEditMedia(btn) {
     if (!bridge) return;
     bridge.selectMediaFile(mediaType, function(result) {
         if (result) {
-            var ta = document.querySelector('.edit-card-field-input[data-field="' + fieldName + '"]');
-            if (ta) {
-                if (ta.value && !ta.value.endsWith('\n')) ta.value += '\n';
-                ta.value += result;
+            var el = document.querySelector('.edit-card-field-input[data-field="' + fieldName + '"]');
+            if (el) {
+                var content = el.innerHTML.replace(/<br\s*\/?>\s*$/, '');
+                if (content && content.length > 0) content += '<br>';
+                el.innerHTML = content + result;
             }
         }
     });
@@ -1498,9 +1662,10 @@ function saveEditCard() {
 
     var fieldsObj = {};
     var hasContent = false;
-    document.querySelectorAll('.edit-card-field-input').forEach(function(ta) {
-        fieldsObj[ta.getAttribute('data-field')] = ta.value.trim();
-        if (ta.value.trim()) hasContent = true;
+    document.querySelectorAll('.edit-card-field-input').forEach(function(el) {
+        var val = getEditFieldValue(el);
+        fieldsObj[el.getAttribute('data-field')] = val;
+        if (val) hasContent = true;
     });
 
     if (!hasContent) { showAlert('Please fill in at least one field.'); return; }
@@ -1525,4 +1690,78 @@ function deleteCardFromEdit() {
             showView('card-browser');
         }
     });
+}
+
+// ── Card Preview ──
+
+var previewCardTypeId = null;
+
+function openCardPreview() {
+    var typeId = document.getElementById('edit-card-type-select').value;
+    var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
+    previewCardTypeId = typeId;
+
+    // Populate styling fields from the card type
+    document.getElementById('preview-front-template').value = (ct && ct.front_style) || '';
+    document.getElementById('preview-back-template').value = (ct && ct.back_style) || '';
+    document.getElementById('preview-css-style').value = (ct && ct.css_style) || '';
+
+    showView('card-preview');
+    refreshCardPreview();
+}
+
+function getEditCardFields() {
+    var fields = {};
+    document.querySelectorAll('.edit-card-field-input').forEach(function(el) {
+        fields[el.getAttribute('data-field')] = getEditFieldValue(el);
+    });
+    return fields;
+}
+
+function refreshCardPreview() {
+    var frontTemplate = document.getElementById('preview-front-template').value;
+    var backTemplate = document.getElementById('preview-back-template').value;
+    var css = document.getElementById('preview-css-style').value;
+    var fields = getEditCardFields();
+
+    // Apply CSS
+    document.getElementById('preview-card-css').textContent = css;
+
+    // Render front
+    var frontEl = document.getElementById('preview-front-render');
+    if (frontTemplate) {
+        setInnerHTMLWithScripts(frontEl, resolveMedia(renderTemplate(frontTemplate, fields)));
+    } else {
+        var firstField = Object.keys(fields)[0];
+        setInnerHTMLWithScripts(frontEl, resolveMedia(firstField ? fields[firstField] : ''));
+    }
+
+    // Render back
+    var backEl = document.getElementById('preview-back-render');
+    var frontHtml = frontEl.innerHTML;
+    if (backTemplate) {
+        setInnerHTMLWithScripts(backEl, resolveMedia(renderTemplate(backTemplate, fields, frontHtml)));
+    } else {
+        var fieldKeys = Object.keys(fields);
+        setInnerHTMLWithScripts(backEl, resolveMedia(fieldKeys.length > 1 ? fields[fieldKeys[1]] : ''));
+    }
+}
+
+function savePreviewStyling() {
+    var ct = cardTypes.find(function(t) { return String(t.id) === String(previewCardTypeId); });
+    if (!ct) { showAlert('Card type not found.'); return; }
+
+    var frontStyle = document.getElementById('preview-front-template').value;
+    var backStyle = document.getElementById('preview-back-template').value;
+    var cssStyle = document.getElementById('preview-css-style').value;
+
+    if (bridge) {
+        bridge.updateCardType(ct.id, ct.name, JSON.stringify(ct.fields), frontStyle, backStyle, cssStyle);
+        // Update local cardTypes cache
+        ct.front_style = frontStyle;
+        ct.back_style = backStyle;
+        ct.css_style = cssStyle;
+        showAlert('Styling saved.');
+        showView('edit-card');
+    }
 }
