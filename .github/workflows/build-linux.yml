@@ -1,4 +1,4 @@
-name: Build Linux Package
+name: Build Linux AppImage
 
 on:
   push:
@@ -33,31 +33,74 @@ jobs:
             libxcb-render-util0 \
             libxcb-xkb1 \
             libxkbcommon-x11-0 \
-            libglib2.0-0
+            libglib2.0-0 \
+            fuse
 
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller pillow
 
       - name: Build executable with PyInstaller
         run: pyinstaller ImmersionSuite.spec --noconfirm
 
-      - name: Package archive
+      - name: Download appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
+            -O /usr/local/bin/appimagetool
+          chmod +x /usr/local/bin/appimagetool
+
+      - name: Assemble AppDir
+        run: |
+          mkdir -p AppDir
+          cp -r dist/ImmersionSuite AppDir/ImmersionSuite
+
+          python3 - <<'PYEOF'
+          from PIL import Image
+          img = Image.open("installer/icon.ico")
+          sizes = [s for s in img.info.get("sizes", [(256, 256)])]
+          best = max(sizes) if sizes else (256, 256)
+          img.size = best
+          img.save("AppDir/icon.png", format="PNG")
+          PYEOF
+
+          cat > AppDir/ImmersionSuite.desktop <<EOF
+          [Desktop Entry]
+          Version=1.1.0
+          Type=Application
+          Name=Immersion Suite
+          Comment=Spaced repetition flashcard application
+          Exec=ImmersionSuite
+          Icon=icon
+          Terminal=false
+          Categories=Education;
+          StartupWMClass=ImmersionSuite
+          EOF
+
+          cat > AppDir/AppRun <<'EOF'
+          #!/usr/bin/env bash
+          SELF=$(readlink -f "$0")
+          HERE="${SELF%/*}"
+          exec "${HERE}/ImmersionSuite/ImmersionSuite" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+      - name: Build AppImage
         run: |
           mkdir -p installer/output
-          tar -czf installer/output/ImmersionSuite_v1.1.0_Linux_x86_64.tar.gz -C dist ImmersionSuite
+          ARCH=x86_64 appimagetool --appimage-extract-and-run \
+            AppDir installer/output/ImmersionSuite_v1.1.0_Linux_x86_64.AppImage
 
-      - name: Upload archive artifact
+      - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
           name: ImmersionSuite-v1.1.0-Linux-x86_64
-          path: installer/output/*.tar.gz
+          path: installer/output/*.AppImage
           retention-days: 30
 
-      # If triggered by a version tag, attach the archive to a GitHub Release
+      # If triggered by a version tag, attach the AppImage to a GitHub Release
       - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer/output/*.tar.gz
+          files: installer/output/*.AppImage
