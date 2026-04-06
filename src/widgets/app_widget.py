@@ -174,8 +174,14 @@ class AppBridge(QObject):
 
     @pyqtSlot()
     def openDataFolder(self):
-        import subprocess
-        subprocess.Popen(['xdg-open', str(database.BASE_DIR / 'data')])
+        import subprocess, platform
+        data_path = str(database.BASE_DIR / 'data')
+        if platform.system() == 'Windows':
+            subprocess.Popen(['explorer', data_path])
+        elif platform.system() == 'Darwin':
+            subprocess.Popen(['open', data_path])
+        else:
+            subprocess.Popen(['xdg-open', data_path])
 
     @pyqtSlot()
     def clearReviewHistory(self):
@@ -371,7 +377,12 @@ class AppWidget(QWidget):
         self.channel.registerObject("bridge", self.bridge)
         self.web_view.page().setWebChannel(self.channel)
 
-        page_path = Path(__file__).parent.parent.parent / "web" / "pages" / "app.html"
+        import sys
+        if getattr(sys, 'frozen', False):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent.parent.parent
+        page_path = base_path / "web" / "pages" / "app.html"
         self.web_view.setUrl(QUrl.fromLocalFile(str(page_path.absolute())))
 
         layout.addWidget(self.web_view)

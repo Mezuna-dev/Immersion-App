@@ -8,7 +8,12 @@ import models
 # Section: Create Database File and Directory
 # ===========================================================
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+import sys as _sys
+if getattr(_sys, 'frozen', False):
+    # Running as a PyInstaller bundle — keep user data next to the .exe
+    BASE_DIR = Path(_sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 Path(f"{BASE_DIR}/data").mkdir(parents=True, exist_ok=True)
 DB_PATH = BASE_DIR / 'data' / 'app.db'
 SETTINGS_PATH = BASE_DIR / 'data' / 'settings.json'
@@ -822,8 +827,8 @@ def get_retention_stats(deck_id=None, start_date=None, end_date=None) -> dict:
             SUM(CASE WHEN interval_before > 0 AND interval_before < 21 AND Rating >= 3 THEN 1 ELSE 0 END),
             SUM(CASE WHEN interval_before >= 21 THEN 1 ELSE 0 END),
             SUM(CASE WHEN interval_before >= 21 AND Rating >= 3 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN interval_before > 0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN interval_before > 0 AND Rating >= 3 THEN 1 ELSE 0 END)
+            COUNT(*),
+            SUM(CASE WHEN Rating >= 3 THEN 1 ELSE 0 END)
         FROM filtered
     """, params)
 

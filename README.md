@@ -1,4 +1,4 @@
-# Immersion Suite v1.0.0
+# Immersion Suite v1.1.0
 
 A desktop application for language learners featuring a built-in SRS flashcard system, statistics dashboard, and Anki deck importing. Immersion material tracking is coming soon.
 
