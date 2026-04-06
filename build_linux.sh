@@ -51,7 +51,7 @@ PYEOF
 # Desktop entry (paths are relative inside an AppImage)
 cat > AppDir/ImmersionSuite.desktop <<EOF
 [Desktop Entry]
-Version=1.1.0
+Version=1.0
 Type=Application
 Name=Immersion Suite
 Comment=Spaced repetition flashcard application
