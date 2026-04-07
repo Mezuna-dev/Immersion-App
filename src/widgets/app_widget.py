@@ -174,14 +174,11 @@ class AppBridge(QObject):
 
     @pyqtSlot()
     def openDataFolder(self):
-        import subprocess, platform
-        data_path = str(database.BASE_DIR / 'data')
-        if platform.system() == 'Windows':
-            subprocess.Popen(['explorer', data_path])
-        elif platform.system() == 'Darwin':
-            subprocess.Popen(['open', data_path])
-        else:
-            subprocess.Popen(['xdg-open', data_path])
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        data_path = database.BASE_DIR / 'data'
+        data_path.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(data_path)))
 
     @pyqtSlot()
     def clearReviewHistory(self):
