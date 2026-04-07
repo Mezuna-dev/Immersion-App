@@ -66,6 +66,7 @@ EOF
 cat > AppDir/AppRun <<'EOF'
 #!/usr/bin/env bash
 SELF=$(readlink -f "$0")
+HERE=$(dirname "$SELF")
 
 case "${1:-}" in
   --install)
@@ -79,7 +80,7 @@ case "${1:-}" in
     echo "Installing Immersion Suite..."
     cp "$SELF" "$DEST"
     chmod +x "$DEST"
-    cp "$APPDIR/icon.png" "$ICON_DIR/immersionsuite.png"
+    cp "$HERE/icon.png" "$ICON_DIR/immersionsuite.png"
     cat > "$DESKTOP_DIR/ImmersionSuite.desktop" <<DESKTOP
 [Desktop Entry]
 Version=1.0
@@ -115,7 +116,7 @@ DESKTOP
     ;;
 esac
 
-exec "$APPDIR/ImmersionSuite/ImmersionSuite" "$@"
+exec "$HERE/ImmersionSuite/ImmersionSuite" "$@"
 EOF
 chmod +x AppDir/AppRun
 
