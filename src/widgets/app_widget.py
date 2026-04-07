@@ -174,11 +174,26 @@ class AppBridge(QObject):
 
     @pyqtSlot()
     def openDataFolder(self):
-        from PyQt6.QtGui import QDesktopServices
-        from PyQt6.QtCore import QUrl
+        import sys, subprocess, os
         data_path = database.BASE_DIR / 'data'
         data_path.mkdir(parents=True, exist_ok=True)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(data_path)))
+        if sys.platform == 'linux':
+            env = os.environ.copy()
+            # PyInstaller overrides LD_LIBRARY_PATH with its bundled libs,
+            # which breaks spawned system processes like xdg-open / file managers.
+            # Restore the original value so the child process uses system libs.
+            orig = env.get('LD_LIBRARY_PATH_ORIG')
+            if orig is not None:
+                env['LD_LIBRARY_PATH'] = orig
+            else:
+                env.pop('LD_LIBRARY_PATH', None)
+            subprocess.Popen(['xdg-open', str(data_path)], env=env)
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', str(data_path)])
+        else:
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(data_path)))
 
     @pyqtSlot()
     def clearReviewHistory(self):
