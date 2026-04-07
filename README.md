@@ -42,6 +42,19 @@ A desktop application for language learners featuring a built-in SRS flashcard s
 ### Coming Soon
 - **Immersion Tracking** — log and track immersed materials (books, shows, podcasts, etc.) and total immersion time
 
+## Installing
+
+### Windows
+Download and run `ImmersionSuite_v1.x.x_Setup.exe` from the latest release.
+
+### Linux
+
+Download `ImmersionSuite_v1.x.x_Linux_x86_64.run` from latest release and run the installer:
+
+```bash
+bash ImmersionSuite_v1.x.x_Linux_x86_64.run
+```
+
 ## Requirements
 
 - Python 3.10+
