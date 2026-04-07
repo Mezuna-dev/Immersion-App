@@ -66,8 +66,56 @@ EOF
 cat > AppDir/AppRun <<'EOF'
 #!/usr/bin/env bash
 SELF=$(readlink -f "$0")
-HERE="${SELF%/*}"
-exec "${HERE}/ImmersionSuite/ImmersionSuite" "$@"
+
+case "${1:-}" in
+  --install)
+    BIN_DIR="$HOME/.local/bin"
+    ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
+    DESKTOP_DIR="$HOME/.local/share/applications"
+    DEST="$BIN_DIR/ImmersionSuite.AppImage"
+
+    mkdir -p "$BIN_DIR" "$ICON_DIR" "$DESKTOP_DIR"
+
+    echo "Installing Immersion Suite..."
+    cp "$SELF" "$DEST"
+    chmod +x "$DEST"
+    cp "$APPDIR/icon.png" "$ICON_DIR/immersionsuite.png"
+    cat > "$DESKTOP_DIR/ImmersionSuite.desktop" <<DESKTOP
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Immersion Suite
+Comment=Spaced repetition flashcard application
+Exec=$DEST
+Icon=immersionsuite
+Terminal=false
+Categories=Education;
+StartupWMClass=ImmersionSuite
+DESKTOP
+    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+    gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    echo "Done! Immersion Suite is now in your application menu."
+    echo "To uninstall: $DEST --uninstall"
+    exit 0
+    ;;
+
+  --uninstall)
+    BIN_DIR="$HOME/.local/bin"
+    ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
+    DESKTOP_DIR="$HOME/.local/share/applications"
+
+    rm -f "$BIN_DIR/ImmersionSuite.AppImage"
+    rm -f "$ICON_DIR/immersionsuite.png"
+    rm -f "$DESKTOP_DIR/ImmersionSuite.desktop"
+    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+    gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+    echo "Immersion Suite has been uninstalled."
+    echo "Your data at ~/.local/share/ImmersionSuite/ has been preserved."
+    exit 0
+    ;;
+esac
+
+exec "$APPDIR/ImmersionSuite/ImmersionSuite" "$@"
 EOF
 chmod +x AppDir/AppRun
 
@@ -80,4 +128,5 @@ ARCH=x86_64 appimagetool AppDir "${OUTPUT_DIR}/${APPIMAGE_NAME}"
 echo
 echo "=== Build complete ==="
 echo "AppImage output: ${OUTPUT_DIR}/${APPIMAGE_NAME}"
-echo "To run: chmod +x ${OUTPUT_DIR}/${APPIMAGE_NAME} && ./${OUTPUT_DIR}/${APPIMAGE_NAME}"
+echo "To install: chmod +x ${OUTPUT_DIR}/${APPIMAGE_NAME} && ./${OUTPUT_DIR}/${APPIMAGE_NAME} --install"
+echo "To run directly without installing: ./${OUTPUT_DIR}/${APPIMAGE_NAME}"
