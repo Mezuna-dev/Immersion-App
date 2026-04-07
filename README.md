@@ -55,7 +55,9 @@ Download `ImmersionSuite_v1.x.x_Linux_x86_64.run` from latest release and run th
 bash ImmersionSuite_v1.x.x_Linux_x86_64.run
 ```
 
-## Requirements
+## From source (all platforms)
+
+### Requirements
 
 - Python 3.10+
 - [PyQt6](https://pypi.org/project/PyQt6/)
