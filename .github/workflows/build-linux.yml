@@ -1,4 +1,4 @@
-name: Build Linux AppImage
+name: Build Linux Installer
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
             libxcb-xkb1 \
             libxkbcommon-x11-0 \
             libglib2.0-0 \
-            fuse
+            makeself
 
       - name: Install Python dependencies
         run: |
@@ -44,112 +44,37 @@ jobs:
       - name: Build executable with PyInstaller
         run: pyinstaller ImmersionSuite.spec --noconfirm
 
-      - name: Download appimagetool
+      - name: Add icon and setup script to bundle
         run: |
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
-            -O /usr/local/bin/appimagetool
-          chmod +x /usr/local/bin/appimagetool
-
-      - name: Assemble AppDir
-        run: |
-          mkdir -p AppDir
-          cp -r dist/ImmersionSuite AppDir/ImmersionSuite
-
           python3 - <<'PYEOF'
           from PIL import Image
           img = Image.open("installer/icon.ico")
           sizes = [s for s in img.info.get("sizes", [(256, 256)])]
           best = max(sizes) if sizes else (256, 256)
           img.size = best
-          img.save("AppDir/icon.png", format="PNG")
+          img.save("dist/ImmersionSuite/icon.png", format="PNG")
           PYEOF
+          cp installer/linux_setup.sh dist/ImmersionSuite/linux_setup.sh
+          chmod +x dist/ImmersionSuite/linux_setup.sh
 
-          cat > AppDir/ImmersionSuite.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Immersion Suite
-          Comment=Spaced repetition flashcard application
-          Exec=ImmersionSuite
-          Icon=icon
-          Terminal=false
-          Categories=Education;
-          StartupWMClass=ImmersionSuite
-          EOF
-
-          cat > AppDir/AppRun <<'APPRUN'
-          #!/usr/bin/env bash
-          SELF=$(readlink -f "$0")
-          HERE=$(dirname "$SELF")
-
-          case "${1:-}" in
-            --install)
-              BIN_DIR="$HOME/.local/bin"
-              ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
-              DESKTOP_DIR="$HOME/.local/share/applications"
-              DEST="$BIN_DIR/ImmersionSuite.AppImage"
-
-              mkdir -p "$BIN_DIR" "$ICON_DIR" "$DESKTOP_DIR"
-
-              echo "Installing Immersion Suite..."
-              cp "$SELF" "$DEST"
-              chmod +x "$DEST"
-              cp "$HERE/icon.png" "$ICON_DIR/immersionsuite.png"
-              cat > "$DESKTOP_DIR/ImmersionSuite.desktop" <<DESKTOP
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Immersion Suite
-          Comment=Spaced repetition flashcard application
-          Exec=$DEST
-          Icon=immersionsuite
-          Terminal=false
-          Categories=Education;
-          StartupWMClass=ImmersionSuite
-          DESKTOP
-              update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-              gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
-              echo "Done! Immersion Suite is now in your application menu."
-              echo "To uninstall: $DEST --uninstall"
-              exit 0
-              ;;
-
-            --uninstall)
-              BIN_DIR="$HOME/.local/bin"
-              ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
-              DESKTOP_DIR="$HOME/.local/share/applications"
-
-              rm -f "$BIN_DIR/ImmersionSuite.AppImage"
-              rm -f "$ICON_DIR/immersionsuite.png"
-              rm -f "$DESKTOP_DIR/ImmersionSuite.desktop"
-              update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-              gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
-              echo "Immersion Suite has been uninstalled."
-              echo "Your data at ~/.local/share/ImmersionSuite/ has been preserved."
-              exit 0
-              ;;
-          esac
-
-          exec "$HERE/ImmersionSuite/ImmersionSuite" "$@"
-          APPRUN
-          chmod +x AppDir/AppRun
-
-      - name: Build AppImage
+      - name: Build self-extracting installer
         run: |
           mkdir -p installer/output
-          ARCH=x86_64 appimagetool --appimage-extract-and-run \
-            AppDir installer/output/ImmersionSuite_v1.1.0_Linux_x86_64.AppImage
+          makeself dist/ImmersionSuite \
+            installer/output/ImmersionSuite_v1.1.0_Linux_x86_64.run \
+            "Immersion Suite v1.1.0" \
+            ./linux_setup.sh
 
-      - name: Upload AppImage artifact
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: ImmersionSuite-v1.1.0-Linux-x86_64
-          path: installer/output/*.AppImage
+          path: installer/output/*.run
           retention-days: 30
 
-      # If triggered by a version tag, attach the AppImage to a GitHub Release
+      # If triggered by a version tag, attach the installer to a GitHub Release
       - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer/output/*.AppImage
+          files: installer/output/*.run
