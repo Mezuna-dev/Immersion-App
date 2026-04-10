@@ -6,6 +6,8 @@ var createCardPreselectedDeckId = null;
 var currentAccent = '#9067C6';
 var currentFontSize = 'medium';
 var FONT_SIZE_MAP = { small: '1.8rem', medium: '2.5rem', large: '3.5rem' };
+var collapsedDecks = new Set();
+var deckCollapseInitialized = false;
 
 new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge = channel.objects.bridge;
@@ -211,6 +213,9 @@ function showView(viewId) {
     if (viewId === 'edit-card' && bridge) {
         if (cardTypes.length === 0) bridge.getCardTypes();
     }
+    if (viewId === 'create-deck') {
+        populateParentDeckSelect('deck-parent-select');
+    }
     if (viewId === 'create-card' && bridge) {
         if (cardTypes.length === 0) bridge.getCardTypes();
         else updateCardTypes(cardTypes);
@@ -224,19 +229,27 @@ function updateStats(due, newCards) {
     document.getElementById('new-cards').textContent = newCards;
 }
 
+function populateDeckSelectHierarchical(select, flat) {
+    var frag = document.createDocumentFragment();
+    flat.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.deck.id;
+        var indent = '';
+        for (var i = 0; i < item.depth; i++) indent += '\u00A0\u00A0\u00A0\u00A0';
+        opt.textContent = indent + item.deck.name;
+        frag.appendChild(opt);
+    });
+    select.appendChild(frag);
+}
+
 function populateCardDeckSelect() {
     var select = document.getElementById('card-deck-select');
     if (!select) return;
     var preselect = createCardPreselectedDeckId !== null ? String(createCardPreselectedDeckId) : select.value;
     select.innerHTML = '';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (preselect && decks.some(function(d) { return String(d.id) === preselect; })) {
         select.value = preselect;
     }
@@ -247,14 +260,9 @@ function populateRetentionDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -292,14 +300,9 @@ function populateHeatmapDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -434,6 +437,47 @@ function renderHeatmapSVG(counts) {
     }, true);
 }
 
+function buildDeckTree(deckList) {
+    var map = {};
+    var roots = [];
+    deckList.forEach(function(d) { map[d.id] = { deck: d, children: [] }; });
+    deckList.forEach(function(d) {
+        if (d.parent_id && map[d.parent_id]) {
+            map[d.parent_id].children.push(map[d.id]);
+        } else {
+            roots.push(map[d.id]);
+        }
+    });
+    return roots;
+}
+
+function flattenDeckTree(nodes, depth, respectCollapse) {
+    var result = [];
+    nodes.forEach(function(node) {
+        var isCollapsed = respectCollapse && collapsedDecks.has(node.deck.id);
+        result.push({ deck: node.deck, depth: depth, hasChildren: node.children.length > 0, collapsed: isCollapsed });
+        if (!isCollapsed) {
+            result = result.concat(flattenDeckTree(node.children, depth + 1, respectCollapse));
+        }
+    });
+    return result;
+}
+
+function toggleDeckCollapse(deckId) {
+    if (collapsedDecks.has(deckId)) {
+        collapsedDecks.delete(deckId);
+    } else {
+        collapsedDecks.add(deckId);
+    }
+    renderDeckList();
+}
+
+function expandAllDecks() {
+    collapsedDecks.clear();
+    deckCollapseInitialized = true;
+    renderDeckList();
+}
+
 function updateDecks(deckData) {
     decks = deckData;
     populateCardDeckSelect();
@@ -443,24 +487,141 @@ function updateDecks(deckData) {
         fetchRetentionStats();
         fetchHeatmap();
     }
+    // On first load, auto-collapse all parent decks
+    if (!deckCollapseInitialized) {
+        deckCollapseInitialized = true;
+        decks.forEach(function(d) {
+            if (decks.some(function(c) { return c.parent_id === d.id; })) {
+                collapsedDecks.add(d.id);
+            }
+        });
+    }
+    renderDeckList();
+}
+
+function isDescendantOf(childId, ancestorId) {
+    var queue = [ancestorId];
+    while (queue.length) {
+        var cur = queue.shift();
+        for (var i = 0; i < decks.length; i++) {
+            if (decks[i].parent_id === cur) {
+                if (decks[i].id === childId) return true;
+                queue.push(decks[i].id);
+            }
+        }
+    }
+    return false;
+}
+
+var deckDragId = null;
+
+function renderDeckList() {
     var container = document.getElementById('deck-list');
     container.innerHTML = '';
     if (decks.length === 0) {
         container.innerHTML = '<p class="text">No decks found. Create or import a deck to get started.</p>';
         return;
     }
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0, true);
     var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
+
+    // Top-level drop zone — drop here to make a deck a root deck
+    var topDrop = document.createElement('div');
+    topDrop.className = 'deck-drop-zone';
+    topDrop.style.cssText = 'height:6px; max-width:600px; border-radius:4px; transition:background-color 0.15s ease, height 0.15s ease; margin-bottom:0.25rem;';
+    topDrop.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        topDrop.style.backgroundColor = currentAccent;
+        topDrop.style.height = '10px';
+    });
+    topDrop.addEventListener('dragleave', function() {
+        topDrop.style.backgroundColor = '';
+        topDrop.style.height = '6px';
+    });
+    topDrop.addEventListener('drop', function(e) {
+        e.preventDefault();
+        topDrop.style.backgroundColor = '';
+        topDrop.style.height = '6px';
+        if (deckDragId && bridge) {
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (dragged && dragged.parent_id) {
+                bridge.setDeckParent(deckDragId, 0);
+            }
+        }
+        deckDragId = null;
+    });
+    frag.appendChild(topDrop);
+
+    flat.forEach(function(item) {
+        var deck = item.deck;
+        var depth = item.depth;
         var card = document.createElement('div');
         card.className = 'card text-white mb-3 deck-card';
+        card.setAttribute('draggable', 'true');
+        card.dataset.deckId = deck.id;
         card.style.backgroundColor = '#2d2a3e';
-        card.style.borderTop = '3px solid ' + currentAccent;
+        card.style.borderTop = depth === 0 ? '3px solid ' + currentAccent : '1px solid #3d3a50';
         card.style.borderLeft = 'none';
         card.style.borderRight = 'none';
         card.style.borderBottom = '1px solid #3d3a50';
         card.style.cursor = 'pointer';
         card.style.maxWidth = '600px';
-        card.style.transition = 'background-color 0.15s ease';
+        card.style.transition = 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease';
+        if (depth > 0) {
+            card.style.marginLeft = (depth * 1.5) + 'rem';
+            card.style.maxWidth = (600 - depth * 24) + 'px';
+        }
+
+        // --- Drag source ---
+        card.addEventListener('dragstart', function(e) {
+            deckDragId = deck.id;
+            card.style.opacity = '0.5';
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(deck.id));
+        });
+        card.addEventListener('dragend', function() {
+            card.style.opacity = '1';
+            deckDragId = null;
+        });
+
+        // --- Drop target ---
+        card.addEventListener('dragover', function(e) {
+            if (!deckDragId || deckDragId === deck.id) return;
+            // Prevent dropping onto own descendant
+            if (isDescendantOf(deck.id, deckDragId)) return;
+            // Prevent dropping onto current parent (no-op)
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (dragged && dragged.parent_id === deck.id) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            card.style.outline = '2px solid ' + currentAccent;
+            card.style.outlineOffset = '-2px';
+        });
+        card.addEventListener('dragleave', function() {
+            card.style.outline = '';
+            card.style.outlineOffset = '';
+        });
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            card.style.outline = '';
+            card.style.outlineOffset = '';
+            if (!deckDragId || deckDragId === deck.id) return;
+            if (isDescendantOf(deck.id, deckDragId)) return;
+            if (bridge) {
+                bridge.setDeckParent(deckDragId, deck.id);
+            }
+            deckDragId = null;
+        });
+
+        var chevron = '';
+        if (item.hasChildren) {
+            var rotation = item.collapsed ? '0' : '90';
+            chevron = '<span class="deck-collapse-toggle" data-deck-id="' + deck.id + '" style="cursor:pointer; margin-right:0.75rem; user-select:none; display:inline-flex; align-items:center; justify-content:center; width:2rem; height:2rem; border-radius:4px; transition:transform 0.15s ease, background-color 0.15s ease; transform:rotate(' + rotation + 'deg);">' +
+                '<svg width="16" height="16" viewBox="0 0 12 12" fill="none" style="flex-shrink:0;"><path d="M3 1.5L8.5 6L3 10.5" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+            '</span>';
+        }
         var dueBadge = deck.due > 0
             ? '<span class="badge" style="background-color:' + currentAccent + '; font-size:0.82rem; padding:0.35rem 0.65rem;">' + deck.due + ' due</span>'
             : '';
@@ -472,17 +633,28 @@ function updateDecks(deckData) {
             : '';
         card.innerHTML =
             '<div class="card-body d-flex justify-content-between align-items-center" style="padding: 0.9rem 1.25rem;">' +
-                '<div>' +
-                    '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
-                    '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
+                '<div style="display:flex; align-items:center;">' +
+                    chevron +
+                    '<div>' +
+                        '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
+                        '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
+                    '</div>' +
                 '</div>' +
                 '<div class="d-flex gap-2 align-items-center">' +
                     dueBadge + newBadge + emptyLabel +
                 '</div>' +
             '</div>';
-        card.addEventListener('mouseenter', function() { card.style.backgroundColor = '#35324a'; });
+        card.addEventListener('mouseenter', function() { if (!deckDragId) card.style.backgroundColor = '#35324a'; });
         card.addEventListener('mouseleave', function() { card.style.backgroundColor = '#2d2a3e'; });
         card.addEventListener('click', function(e) {
+            // If the chevron toggle was clicked, collapse/expand instead of navigating
+            var toggle = e.target.closest('.deck-collapse-toggle');
+            if (toggle) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDeckCollapse(deck.id);
+                return;
+            }
             e.preventDefault();
             showDeckDetails(deck);
         });
@@ -496,17 +668,53 @@ function showCreateCard(deckId) {
     showView('create-card');
 }
 
+function populateParentDeckSelect(selectId, excludeDeckId) {
+    var select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="0">None (top level)</option>';
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    // Collect IDs to exclude (the deck itself and all its descendants)
+    var excludeIds = new Set();
+    if (excludeDeckId) {
+        excludeIds.add(excludeDeckId);
+        var queue = [excludeDeckId];
+        while (queue.length) {
+            var cur = queue.shift();
+            decks.forEach(function(d) {
+                if (d.parent_id === cur) {
+                    excludeIds.add(d.id);
+                    queue.push(d.id);
+                }
+            });
+        }
+    }
+    var frag = document.createDocumentFragment();
+    flat.forEach(function(item) {
+        if (excludeIds.has(item.deck.id)) return;
+        var opt = document.createElement('option');
+        opt.value = item.deck.id;
+        var indent = '';
+        for (var i = 0; i < item.depth; i++) indent += '\u00A0\u00A0\u00A0\u00A0';
+        opt.textContent = indent + item.deck.name;
+        frag.appendChild(opt);
+    });
+    select.appendChild(frag);
+}
+
 function createDeck() {
     var name = document.getElementById('deck-name').value.trim();
     var description = document.getElementById('deck-description').value.trim();
+    var parentId = parseInt(document.getElementById('deck-parent-select').value, 10) || 0;
     if (name === '') {
         showAlert('Please enter a deck name.');
         return;
     }
     if (bridge) {
-        bridge.createDeck(name, description);
+        bridge.createDeck(name, description, parentId);
         document.getElementById('deck-name').value = '';
         document.getElementById('deck-description').value = '';
+        document.getElementById('deck-parent-select').value = '0';
         showView('srs');
     }
 }
@@ -625,6 +833,8 @@ function showDeckSettings() {
     if (!deck) return;
     document.getElementById('settings-deck-name').textContent = deck.name;
     document.getElementById('settings-deck-name-input').value = deck.name;
+    populateParentDeckSelect('settings-deck-parent-select', deck.id);
+    document.getElementById('settings-deck-parent-select').value = deck.parent_id ? String(deck.parent_id) : '0';
     document.getElementById('settings-deck-description-input').value = deck.description || '';
     document.getElementById('settings-new-cards-limit').value = deck.new_cards_limit !== undefined ? deck.new_cards_limit : 15;
     document.getElementById('settings-learning-steps').value = deck.learning_steps !== undefined ? deck.learning_steps : '1 10';
@@ -638,6 +848,7 @@ function saveDeckSettings() {
     if (!currentDeckForDetails || !bridge) return;
     var name = document.getElementById('settings-deck-name-input').value.trim();
     if (name === '') { showAlert('Deck name cannot be empty.'); return; }
+    var parentId = parseInt(document.getElementById('settings-deck-parent-select').value, 10) || 0;
     var description = document.getElementById('settings-deck-description-input').value.trim();
     var limit = parseInt(document.getElementById('settings-new-cards-limit').value, 10);
     if (isNaN(limit) || limit < 0) { showAlert('Please enter a valid number.'); return; }
@@ -645,7 +856,7 @@ function saveDeckSettings() {
     var relearningSteps = document.getElementById('settings-relearning-steps').value.trim();
     var studyOrder = document.getElementById('settings-study-order').value || 'new_first';
     var answerDisplay = document.getElementById('settings-answer-display').value || 'replace';
-    bridge.saveDeckSettings(currentDeckForDetails.id, name, description, limit, learningSteps, relearningSteps, studyOrder, answerDisplay);
+    bridge.saveDeckSettings(currentDeckForDetails.id, name, description, limit, learningSteps, relearningSteps, studyOrder, answerDisplay, parentId);
     currentDeckForDetails.name = name;
     currentDeckForDetails.description = description;
     currentDeckForDetails.new_cards_limit = limit;
@@ -653,6 +864,7 @@ function saveDeckSettings() {
     currentDeckForDetails.relearning_steps = relearningSteps;
     currentDeckForDetails.study_order = studyOrder;
     currentDeckForDetails.answer_display = answerDisplay;
+    currentDeckForDetails.parent_id = parentId || null;
     showDeckDetails(currentDeckForDetails);
 }
 
@@ -707,10 +919,15 @@ function renderTemplate(template, fields, frontHtml) {
     var result = template;
     // {{FrontSide}} — Anki special token: re-render the already-rendered front HTML
     result = result.replace(/\{\{FrontSide\}\}/gi, frontHtml || '');
-    // Conditional blocks: {{#Field}}...{{/Field}}
+    // Positive conditional blocks: {{#Field}}...{{/Field}} — show content when field is non-empty
     result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
         key = key.trim();
         return (fields[key] && fields[key].trim()) ? content : '';
+    });
+    // Negation conditional blocks: {{^Field}}...{{/Field}} — show content when field is empty
+    result = result.replace(/\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
+        key = key.trim();
+        return (!fields[key] || !fields[key].trim()) ? content : '';
     });
     // Simple placeholders: {{Field}} or {{filter:Field}}
     result = result.replace(/\{\{([^}]+)\}\}/g, function(match, key) {
@@ -1195,14 +1412,9 @@ function populateBrowseDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -1349,14 +1561,9 @@ function loadCardForEdit(data) {
     // Populate deck select
     var deckSelect = document.getElementById('edit-card-deck-select');
     deckSelect.innerHTML = '';
-    var deckFrag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        deckFrag.appendChild(opt);
-    });
-    deckSelect.appendChild(deckFrag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(deckSelect, flat);
     if (card.deck_id) deckSelect.value = card.deck_id;
 
     // Populate card type select

@@ -91,7 +91,9 @@ def initialize_database():
                 Learning_Steps TEXT DEFAULT '1 10',
                 Relearning_Steps TEXT DEFAULT '10',
                 Study_Order TEXT DEFAULT 'new_first',
-                Answer_Display TEXT DEFAULT 'replace'
+                Answer_Display TEXT DEFAULT 'replace',
+                Parent_ID INTEGER,
+                FOREIGN KEY (Parent_ID) REFERENCES Deck(ID)
                 )
         """)
 
@@ -158,6 +160,7 @@ def migrate_database():
         "ALTER TABLE Deck ADD COLUMN Relearning_Steps TEXT DEFAULT '10'",
         "ALTER TABLE Deck ADD COLUMN Study_Order TEXT DEFAULT 'new_first'",
         "ALTER TABLE Deck ADD COLUMN Answer_Display TEXT DEFAULT 'replace'",
+        "ALTER TABLE Deck ADD COLUMN Parent_ID INTEGER REFERENCES Deck(ID)",
     ]:
         try:
             cur.execute(stmt)
@@ -174,19 +177,70 @@ def migrate_database():
 
 # --- Deck Functions --------------------------------
 
+def get_descendant_deck_ids(deck_id):
+    """Return a list of all descendant deck IDs for the given deck (recursive)."""
+    con = create_db_connection()
+    cur = con.cursor()
+    result = []
+    queue = [deck_id]
+    while queue:
+        current = queue.pop(0)
+        cur.execute("SELECT ID FROM Deck WHERE Parent_ID = ?", (current,))
+        for (child_id,) in cur.fetchall():
+            result.append(child_id)
+            queue.append(child_id)
+    con.close()
+    return result
+
+def get_deck_and_descendant_ids(deck_id):
+    """Return the deck_id itself plus all its descendant IDs."""
+    return [deck_id] + get_descendant_deck_ids(deck_id)
+
+def get_ordered_subdeck_tree(deck_id):
+    """Return a depth-first ordered list of Deck objects for deck_id and all
+    its descendants (sorted by name at each level, matching Anki's subdeck
+    ordering behaviour)."""
+    con = create_db_connection()
+    cur = con.cursor()
+
+    # Fetch all decks into a lookup
+    cur.execute("SELECT ID, Name, Parent_ID FROM Deck")
+    all_rows = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+    con.close()
+
+    # Build children map
+    children_map = {}
+    for did, (name, pid) in all_rows.items():
+        children_map.setdefault(pid, []).append((did, name))
+    # Sort children by name at each level
+    for pid in children_map:
+        children_map[pid].sort(key=lambda x: x[1].lower())
+
+    # DFS from deck_id
+    result = []
+    stack = [deck_id]
+    while stack:
+        current = stack.pop()
+        result.append(current)
+        # Push children in reverse so first-alpha is processed first
+        kids = children_map.get(current, [])
+        for kid_id, _ in reversed(kids):
+            stack.append(kid_id)
+    return result
+
 def create_deck(name: str, description: str = "", new_cards_limit: int = 15,
                 learning_steps: str = '1 10', relearning_steps: str = '10',
-                study_order: str = 'new_first'):
+                study_order: str = 'new_first', parent_id: int = None):
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     cur.execute("""
         INSERT INTO Deck (Name, Date_Created, Description, New_Cards_Limit,
-                          Learning_Steps, Relearning_Steps, Study_Order)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+                          Learning_Steps, Relearning_Steps, Study_Order, Parent_ID)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (name, creation_date, description, new_cards_limit,
-          learning_steps, relearning_steps, study_order))
+          learning_steps, relearning_steps, study_order, parent_id))
 
     con.commit()
     new_deck_id = cur.lastrowid
@@ -201,11 +255,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID FROM Deck""")
     rows = cur.fetchall()
 
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace')
+        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace', parent_id=row[9])
         decks.append(deck)
 
     con.close()
@@ -216,7 +270,7 @@ def get_deck_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display FROM Deck
+        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID FROM Deck
         WHERE ID=?
     """, (id,))
 
@@ -226,27 +280,29 @@ def get_deck_by_id(id):
         con.close()
         return None
     else:
-        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace')
+        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace', parent_id=row[8])
 
         con.close()
         return deck
 
-def update_deck_settings(deck_id: int, name: str, description: str, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace'):
+def update_deck_settings(deck_id: int, name: str, description: str, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace', parent_id: int = None):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        UPDATE Deck SET Name = ?, Description = ?, New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ? WHERE ID = ?
-    """, (name, description, new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, deck_id))
+        UPDATE Deck SET Name = ?, Description = ?, New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ?, Parent_ID = ? WHERE ID = ?
+    """, (name, description, new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, parent_id, deck_id))
     con.commit()
     con.close()
 
 def delete_deck(deck_id):
+    all_ids = get_deck_and_descendant_ids(deck_id)
+    placeholders = ','.join('?' * len(all_ids))
     con = create_db_connection()
     cur = con.cursor()
 
-    cur.execute("DELETE FROM Review WHERE Card_ID IN (SELECT ID FROM Card WHERE Deck_ID=?)", (deck_id,))
-    cur.execute("DELETE FROM Card WHERE Deck_ID=?", (deck_id,))
-    cur.execute("DELETE FROM Deck WHERE ID=?", (deck_id,))
+    cur.execute(f"DELETE FROM Review WHERE Card_ID IN (SELECT ID FROM Card WHERE Deck_ID IN ({placeholders}))", all_ids)
+    cur.execute(f"DELETE FROM Card WHERE Deck_ID IN ({placeholders})", all_ids)
+    cur.execute(f"DELETE FROM Deck WHERE ID IN ({placeholders})", all_ids)
 
     con.commit()
     con.close()
@@ -409,7 +465,7 @@ def get_card_by_id(id):
         card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
         return card
     
-def get_due_cards(deck_id=None):
+def get_due_cards(deck_id=None, deck_ids=None):
     todays_date = date.today().strftime('%Y-%m-%d')
 
     con = create_db_connection()
@@ -423,7 +479,11 @@ def get_due_cards(deck_id=None):
 
     query_params = [todays_date]
 
-    if deck_id is not None:
+    if deck_ids is not None:
+        placeholders = ','.join('?' * len(deck_ids))
+        query_string += f" AND Deck_ID IN ({placeholders})"
+        query_params.extend(deck_ids)
+    elif deck_id is not None:
         query_string += " AND Deck_ID=?"
         query_params.append(deck_id)
 
@@ -438,7 +498,7 @@ def get_due_cards(deck_id=None):
     con.close()
     return cards
 
-def get_new_cards(deck_id=None, limit=None):
+def get_new_cards(deck_id=None, limit=None, deck_ids=None):
     con = create_db_connection()
     cur = con.cursor()
 
@@ -450,7 +510,11 @@ def get_new_cards(deck_id=None, limit=None):
 
     query_params = []
 
-    if deck_id is not None:
+    if deck_ids is not None:
+        placeholders = ','.join('?' * len(deck_ids))
+        query_string += f" AND Deck_ID IN ({placeholders})"
+        query_params.extend(deck_ids)
+    elif deck_id is not None:
         query_string += " AND Deck_ID=?"
         query_params.append(deck_id)
     if limit is not None:
@@ -500,8 +564,10 @@ def browse_cards(deck_id=None, search_query=None, sort_by=None) -> list:
     params = []
 
     if deck_id is not None:
-        query += " AND c.Deck_ID = ?"
-        params.append(deck_id)
+        all_ids = get_deck_and_descendant_ids(deck_id)
+        placeholders = ','.join('?' * len(all_ids))
+        query += f" AND c.Deck_ID IN ({placeholders})"
+        params.extend(all_ids)
 
     if search_query:
         query += " AND (c.Card_Front LIKE ? OR c.Card_Back LIKE ? OR c.Fields LIKE ?)"
@@ -649,13 +715,26 @@ def get_all_deck_stats():
 
 # --- Review Functions --------------------------------
 
-def get_new_cards_introduced_today(deck_id=None):
+def get_new_cards_introduced_today(deck_id=None, deck_ids=None):
     todays_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     # A card was "introduced today" if its earliest review entry is today
-    if deck_id is not None:
+    if deck_ids is not None:
+        placeholders = ','.join('?' * len(deck_ids))
+        cur.execute(f"""
+            SELECT COUNT(DISTINCT r.Card_ID) FROM Review r
+            JOIN Card c ON r.Card_ID = c.ID
+            WHERE c.Deck_ID IN ({placeholders})
+            AND r.Review_Date = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM Review r2
+                WHERE r2.Card_ID = r.Card_ID
+                AND r2.Review_Date < ?
+            )
+        """, deck_ids + [todays_date, todays_date])
+    elif deck_id is not None:
         cur.execute("""
             SELECT COUNT(DISTINCT r.Card_ID) FROM Review r
             JOIN Card c ON r.Card_ID = c.ID
@@ -733,9 +812,9 @@ def get_data_info() -> dict:
 def export_all_data() -> dict:
     con = create_db_connection()
     cur = con.cursor()
-    cur.execute("SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display FROM Deck")
+    cur.execute("SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID FROM Deck")
     decks = [{'id': r[0], 'name': r[1], 'date_created': r[2], 'new_cards_limit': r[3], 'description': r[4],
-               'learning_steps': r[5], 'relearning_steps': r[6], 'study_order': r[7], 'answer_display': r[8]}
+               'learning_steps': r[5], 'relearning_steps': r[6], 'study_order': r[7], 'answer_display': r[8], 'parent_id': r[9]}
              for r in cur.fetchall()]
     cur.execute("SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card")
     cards = [{'id': r[0], 'deck_id': r[1], 'front': r[2], 'back': r[3], 'reps': r[4], 'ease_factor': r[5],
@@ -763,13 +842,15 @@ def get_daily_review_counts(deck_id=None) -> dict:
     cur = con.cursor()
 
     if deck_id is not None:
-        cur.execute("""
+        all_ids = get_deck_and_descendant_ids(deck_id)
+        placeholders = ','.join('?' * len(all_ids))
+        cur.execute(f"""
             SELECT r.Review_Date, COUNT(*)
             FROM Review r
             JOIN Card c ON r.Card_ID = c.ID
-            WHERE c.Deck_ID = ? AND r.Review_Date >= ? AND r.Review_Date <= ?
+            WHERE c.Deck_ID IN ({placeholders}) AND r.Review_Date >= ? AND r.Review_Date <= ?
             GROUP BY r.Review_Date
-        """, (deck_id, start.isoformat(), today.isoformat()))
+        """, all_ids + [start.isoformat(), today.isoformat()])
     else:
         cur.execute("""
             SELECT Review_Date, COUNT(*)
@@ -809,8 +890,14 @@ def get_retention_stats(deck_id=None, start_date=None, end_date=None) -> dict:
     con = create_db_connection()
     cur = con.cursor()
 
-    deck_filter = 'AND c.Deck_ID = ?' if deck_id is not None else ''
-    params = [deck_id] if deck_id is not None else []
+    if deck_id is not None:
+        all_ids = get_deck_and_descendant_ids(deck_id)
+        placeholders = ','.join('?' * len(all_ids))
+        deck_filter = f'AND c.Deck_ID IN ({placeholders})'
+        params = all_ids
+    else:
+        deck_filter = ''
+        params = []
     params += [start_date, end_date]
 
     cur.execute(f"""

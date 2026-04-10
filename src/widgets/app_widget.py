@@ -20,24 +20,71 @@ class AppBridge(QObject):
         decks = database.get_all_decks()
         all_stats = database.get_all_deck_stats()
         total_due = sum(s['due'] for s in all_stats.values())
+        # Only count root-level decks (parent_id is None) to avoid
+        # double-counting children that are already included via their parent's
+        # sequential subdeck walk.
         total_new = 0
         for deck in decks:
-            stats = all_stats.get(deck.id, {'new_available': 0})
-            introduced_today = database.get_new_cards_introduced_today(deck_id=deck.id)
-            remaining_new = max(0, deck.new_cards_limit - introduced_today)
-            total_new += min(stats['new_available'], remaining_new)
+            if deck.parent_id is not None:
+                continue
+            all_ids = database.get_deck_and_descendant_ids(deck.id)
+            limit = deck.new_cards_limit
+            introduced = database.get_new_cards_introduced_today(deck_ids=all_ids)
+            remaining = max(0, limit - introduced)
+            if remaining == 0:
+                continue
+            ordered_ids = database.get_ordered_subdeck_tree(deck.id)
+            for sub_id in ordered_ids:
+                if remaining <= 0:
+                    break
+                sub_stats = all_stats.get(sub_id, {'new_available': 0})
+                take = min(sub_stats['new_available'], remaining)
+                total_new += take
+                remaining -= take
         self.web_view.page().runJavaScript(f'updateStats({total_due}, {total_new});')
 
     @pyqtSlot()
     def getDecks(self):
         decks = database.get_all_decks()
         all_stats = database.get_all_deck_stats()
+        deck_map = {d.id: d for d in decks}
+
+        # Build aggregated stats: each parent deck includes stats from all descendants
+        def _aggregate_stats(deck_id):
+            desc_ids = database.get_deck_and_descendant_ids(deck_id)
+            agg = {'total': 0, 'young': 0, 'mature': 0, 'due': 0, 'new_available': 0}
+            for did in desc_ids:
+                s = all_stats.get(did, {'total': 0, 'young': 0, 'mature': 0, 'due': 0, 'new_available': 0})
+                for k in agg:
+                    agg[k] += s[k]
+            return agg
+
+        def _compute_new_count(deck_id):
+            """Compute the new-card count matching sequential subdeck behaviour:
+            walk subdecks in tree order, apply the parent's limit as the total
+            budget, and fill from each subdeck before moving to the next."""
+            dk = deck_map.get(deck_id)
+            limit = dk.new_cards_limit if dk else 15
+            all_ids = database.get_deck_and_descendant_ids(deck_id)
+            introduced = database.get_new_cards_introduced_today(deck_ids=all_ids)
+            remaining = max(0, limit - introduced)
+            if remaining == 0:
+                return 0
+            ordered_ids = database.get_ordered_subdeck_tree(deck_id)
+            total_new = 0
+            for sub_id in ordered_ids:
+                if remaining <= 0:
+                    break
+                sub_stats = all_stats.get(sub_id, {'new_available': 0})
+                take = min(sub_stats['new_available'], remaining)
+                total_new += take
+                remaining -= take
+            return total_new
+
         deck_list = []
         for deck in decks:
-            stats = all_stats.get(deck.id, {'total': 0, 'young': 0, 'mature': 0, 'due': 0, 'new_available': 0})
-            introduced_today = database.get_new_cards_introduced_today(deck_id=deck.id)
-            remaining_new = max(0, deck.new_cards_limit - introduced_today)
-            new_count = min(stats['new_available'], remaining_new)
+            stats = _aggregate_stats(deck.id)
+            new_count = _compute_new_count(deck.id)
             deck_list.append({
                 'id': deck.id,
                 'name': deck.name,
@@ -51,7 +98,8 @@ class AppBridge(QObject):
                 'learning_steps': deck.learning_steps or '1 10',
                 'relearning_steps': deck.relearning_steps or '10',
                 'study_order': deck.study_order or 'new_first',
-                'answer_display': deck.answer_display or 'replace'
+                'answer_display': deck.answer_display or 'replace',
+                'parent_id': deck.parent_id,
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
@@ -62,8 +110,8 @@ class AppBridge(QObject):
         if main_window:
             main_window.import_deck()
     
-    @pyqtSlot(str, str)
-    def createDeck(self, deck_name, deck_description):
+    @pyqtSlot(str, str, int)
+    def createDeck(self, deck_name, deck_description, parent_id=0):
         if deck_name:
             s = database.get_app_settings()
             database.create_deck(
@@ -72,6 +120,7 @@ class AppBridge(QObject):
                 learning_steps=s.get('default_learning_steps', '1 10'),
                 relearning_steps=s.get('default_relearning_steps', '10'),
                 study_order=s.get('default_study_order', 'new_first'),
+                parent_id=parent_id if parent_id else None,
             )
             self.refreshStats()
     
@@ -211,9 +260,20 @@ class AppBridge(QObject):
         settings = json.loads(settings_json)
         database.save_app_settings(settings)
 
-    @pyqtSlot(int, str, str, int, str, str, str, str)
-    def saveDeckSettings(self, deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display):
-        database.update_deck_settings(deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display)
+    @pyqtSlot(int, str, str, int, str, str, str, str, int)
+    def saveDeckSettings(self, deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display, parent_id=0):
+        database.update_deck_settings(deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display, parent_id=parent_id if parent_id else None)
+        self.getDecks()
+
+    @pyqtSlot(int, int)
+    def setDeckParent(self, deck_id, parent_id):
+        """Move a deck under a new parent (parent_id=0 means top level)."""
+        con = database.create_db_connection()
+        cur = con.cursor()
+        cur.execute("UPDATE Deck SET Parent_ID = ? WHERE ID = ?",
+                    (parent_id if parent_id else None, deck_id))
+        con.commit()
+        con.close()
         self.getDecks()
 
     @pyqtSlot(int)
@@ -265,24 +325,54 @@ class AppBridge(QObject):
     @pyqtSlot(int)
     def startReview(self, deck_id):
         deck = database.get_deck_by_id(deck_id)
-        new_limit = deck.new_cards_limit if deck else 15
         learning_steps_str = deck.learning_steps if deck else '1 10'
         learning_steps = [int(s) for s in learning_steps_str.split() if s.strip().isdigit()]
         relearning_steps_str = deck.relearning_steps if deck else '10'
         relearning_steps = [int(s) for s in relearning_steps_str.split() if s.strip().isdigit()]
         study_order = deck.study_order if deck else 'new_first'
         answer_display = deck.answer_display if deck else 'replace'
-        introduced_today = database.get_new_cards_introduced_today(deck_id=deck_id)
+
+        # Gather cards subdeck-by-subdeck in tree order (matching Anki):
+        # the parent deck's new-card limit is the total budget, and subdecks
+        # are processed sequentially — subdeck 1 is exhausted entirely before
+        # any new cards are drawn from subdeck 2, etc.
+        new_limit = deck.new_cards_limit if deck else 15
+        ordered_ids = database.get_ordered_subdeck_tree(deck_id)
+        all_deck_ids = database.get_deck_and_descendant_ids(deck_id)
+        introduced_today = database.get_new_cards_introduced_today(deck_ids=all_deck_ids)
         remaining_new = max(0, new_limit - introduced_today)
-        due_cards = database.get_due_cards(deck_id=deck_id)
-        new_cards = database.get_new_cards(deck_id=deck_id, limit=remaining_new)
+        due_cards = database.get_due_cards(deck_ids=all_deck_ids)
+        new_cards = []
+        for sub_id in ordered_ids:
+            if remaining_new <= 0:
+                break
+            batch = database.get_new_cards(deck_id=sub_id, limit=remaining_new)
+            new_cards.extend(batch)
+            remaining_new -= len(batch)
+
         if study_order == 'new_first':
-            ordered = new_cards + due_cards
+            combined = new_cards + due_cards
         elif study_order == 'mix':
-            ordered = [c for pair in zip(due_cards, new_cards) for c in pair]
-            ordered += due_cards[len(new_cards):] + new_cards[len(due_cards):]
+            combined = [c for pair in zip(due_cards, new_cards) for c in pair]
+            combined += due_cards[len(new_cards):] + new_cards[len(due_cards):]
         else:  # new_last
-            ordered = due_cards + new_cards
+            combined = due_cards + new_cards
+
+        # Space siblings apart: cards from the same note (identical fields_json)
+        # are kept in the session but separated so you never see a card and its
+        # reverse back-to-back.  First pass picks one card per note in order;
+        # deferred siblings are appended at the end.
+        seen_fields = set()
+        ordered = []
+        deferred = []
+        for c in combined:
+            key = c.fields_json or ''
+            if key in seen_fields:
+                deferred.append(c)
+            else:
+                seen_fields.add(key)
+                ordered.append(c)
+        ordered.extend(deferred)
         card_type_map = {ct.id: ct for ct in database.get_all_card_types()}
         cards = []
         for card in ordered:
@@ -401,6 +491,8 @@ class AppWidget(QWidget):
         self.setLayout(layout)
         self.setStyleSheet("background-color: #242038;")
 
-    def refresh_stats(self):
+    def refresh_stats(self, after_import=False):
+        if after_import:
+            self.web_view.page().runJavaScript('expandAllDecks();')
         self.bridge.getDecks()
         self.bridge.refreshStats()

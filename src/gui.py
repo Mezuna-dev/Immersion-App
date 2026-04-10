@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
         if any(deck.name == "Default" for deck in decks):
             database.delete_deck_by_name("Default")
             
-        self.app_widget.refresh_stats()
+        self.app_widget.refresh_stats(after_import=True)
 
     def import_error(self, error_message):
         self.progress.close()
