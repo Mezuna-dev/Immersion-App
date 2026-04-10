@@ -5,7 +5,7 @@ var fieldCounter = 0;
 var createCardPreselectedDeckId = null;
 var currentAccent = '#9067C6';
 var currentFontSize = 'medium';
-var FONT_SIZE_MAP = { small: '1.8rem', medium: '2.5rem', large: '3.5rem' };
+var FONT_SIZE_MAP = { small: '1.5rem', medium: '2.5rem', large: '4rem' };
 var collapsedDecks = new Set();
 var deckCollapseInitialized = false;
 
