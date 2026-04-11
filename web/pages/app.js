@@ -32,11 +32,13 @@ function applyAppSettings(settings) {
         autoplay_audio: settings.review_autoplay_audio !== undefined ? settings.review_autoplay_audio : true,
         shortcut_enabled: settings.review_shortcut_enabled !== undefined ? settings.review_shortcut_enabled : true,
         shortcut_key: settings.review_shortcut_key || 'Space',
+        two_button_mode: settings.review_two_button_mode || false,
     };
+    applyRatingButtonMode();
 }
 
 var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first' };
-var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space' };
+var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space', two_button_mode: false };
 var capturingKey = false;
 
 function getKeyDisplayName(code) {
@@ -86,6 +88,7 @@ function showAppSettings() {
     document.getElementById('review-autoplay-audio').checked = currentReviewBehavior.autoplay_audio;
     document.getElementById('review-shortcut-enabled').checked = currentReviewBehavior.shortcut_enabled;
     document.getElementById('shortcut-key-btn').textContent = getKeyDisplayName(currentReviewBehavior.shortcut_key);
+    document.getElementById('review-two-button-mode').checked = currentReviewBehavior.two_button_mode;
 }
 
 function formatBytes(bytes) {
@@ -108,6 +111,20 @@ function previewAccent(color) {
     document.getElementById('settings-accent-hex').textContent = color;
 }
 
+function applyRatingButtonMode() {
+    var container = document.getElementById('review-rating-buttons');
+    if (!container) return;
+    var buttons = container.querySelectorAll('button');
+    var twoBtn = currentReviewBehavior.two_button_mode;
+    // buttons order: Again(1), Hard(3), Good(4), Easy(5)
+    if (buttons.length >= 4) {
+        buttons[1].style.display = twoBtn ? 'none' : '';  // Hard
+        buttons[3].style.display = twoBtn ? 'none' : '';  // Easy
+        // In two-button mode, Good gets accent color text; in four-button mode, Good is green text
+        buttons[2].style.color = twoBtn ? 'var(--accent)' : '#27ae60';
+    }
+}
+
 function buildSettings(overrides) {
     return Object.assign({
         accent_color: currentAccent,
@@ -119,6 +136,7 @@ function buildSettings(overrides) {
         review_autoplay_audio: currentReviewBehavior.autoplay_audio,
         review_shortcut_enabled: currentReviewBehavior.shortcut_enabled,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
+        review_two_button_mode: currentReviewBehavior.two_button_mode,
     }, overrides);
 }
 
@@ -134,6 +152,7 @@ function saveAppSettings() {
         review_autoplay_audio: document.getElementById('review-autoplay-audio').checked,
         review_shortcut_enabled: document.getElementById('review-shortcut-enabled').checked,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
+        review_two_button_mode: document.getElementById('review-two-button-mode').checked,
     });
     applyAppSettings(settings);
     if (bridge) bridge.saveAppSettings(JSON.stringify(settings));
@@ -163,6 +182,7 @@ function resetReviewBehavior() {
         review_autoplay_audio: true,
         review_shortcut_enabled: true,
         review_shortcut_key: 'Space',
+        review_two_button_mode: false,
     });
     applyAppSettings(settings);
     showAppSettings();

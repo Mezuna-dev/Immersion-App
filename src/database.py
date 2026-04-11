@@ -35,6 +35,7 @@ DEFAULT_SETTINGS = {
     'review_autoplay_audio': True,
     'review_shortcut_enabled': True,
     'review_shortcut_key': 'Space',
+    'review_two_button_mode': False,
 }
 
 def get_app_settings() -> dict:

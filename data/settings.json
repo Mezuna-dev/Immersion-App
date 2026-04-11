@@ -7,5 +7,6 @@
   "default_study_order": "new_first",
   "review_autoplay_audio": true,
   "review_shortcut_enabled": true,
-  "review_shortcut_key": "Space"
+  "review_shortcut_key": "Space",
+  "review_two_button_mode": false
 }
