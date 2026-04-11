@@ -868,18 +868,50 @@ function saveDeckSettings() {
     showDeckDetails(currentDeckForDetails);
 }
 
-var reviewQueue = [];
+var newQueue = [];
+var dueQueue = [];
 var learningQueue = []; // [{card, showAfter (ms timestamp)}] — time-gated cards waiting to return
-var currentCardIndex = 0;
+var newCardIndex = 0;
+var dueCardIndex = 0;
 var currentCard = null;
-var currentCardFromLearning = false;
+var currentCardSource = null; // 'new', 'due', or 'learning'
 var currentDeckIdForReview = null;
 var currentDeckLearningSteps = [];
 var currentDeckRelearnSteps = [];
 var currentDeckAnswerDisplay = 'replace';
+var studyOrder = 'mix';
+var interspersionRatio = 1;
 var mediaBaseUrl = '';
 
+function updateReviewCounts() {
+    var newCount = newQueue.length - newCardIndex;
+    var reviewCount = dueQueue.length - dueCardIndex;
+    var learningCount = learningQueue.length;
+    // The current learning card was removed from the array to be shown,
+    // so add it back to the displayed count to stay consistent with
+    // new/due counts (which include the current card).
+    if (currentCardSource === 'learning') {
+        learningCount++;
+    }
+    document.getElementById('review-count-new').textContent = newCount;
+    document.getElementById('review-count-learning').textContent = learningCount;
+    document.getElementById('review-count-review').textContent = reviewCount;
+
+    var newEl = document.getElementById('review-count-new');
+    var learnEl = document.getElementById('review-count-learning');
+    var reviewEl = document.getElementById('review-count-review');
+    newEl.style.textDecoration = currentCardSource === 'new' ? 'underline' : 'none';
+    learnEl.style.textDecoration = currentCardSource === 'learning' ? 'underline' : 'none';
+    reviewEl.style.textDecoration = currentCardSource === 'due' ? 'underline' : 'none';
+}
+
 function startReview(deckId) {
+    // Resume the existing session if one is active for this deck
+    if (currentDeckIdForReview === deckId &&
+        (newCardIndex < newQueue.length || dueCardIndex < dueQueue.length || learningQueue.length > 0)) {
+        showView('review');
+        return;
+    }
     currentDeckIdForReview = deckId;
     if (bridge) {
         bridge.startReview(deckId);
@@ -891,15 +923,21 @@ function updateReviewQueue(data) {
     currentDeckRelearnSteps = data.relearning_steps || [];
     currentDeckAnswerDisplay = data.answer_display || 'replace';
     mediaBaseUrl = data.media_base_url || '';
-    reviewQueue = data.cards || [];
+    studyOrder = data.study_order || 'mix';
+    newQueue = data.new_cards || [];
+    dueQueue = data.due_cards || [];
     learningQueue = [];
-    currentCardIndex = 0;
-    currentCardFromLearning = false;
+    newCardIndex = 0;
+    dueCardIndex = 0;
+    currentCardSource = null;
+    // Anki-style intersperser ratio for 'mix' mode
+    interspersionRatio = (dueQueue.length + 1) / (newQueue.length + 1);
     document.getElementById('review-card-section').style.display = 'block';
     document.getElementById('review-action-bar').style.display = 'flex';
     document.getElementById('review-complete-section').style.display = 'none';
     showView('review');
-    if (reviewQueue.length === 0) {
+    updateReviewCounts();
+    if (newQueue.length === 0 && dueQueue.length === 0) {
         showReviewComplete();
         return;
     }
@@ -1001,33 +1039,53 @@ function attachMedia(btn) {
 
 function showNextCard() {
     var now = Date.now();
-    var hasRegular = currentCardIndex < reviewQueue.length;
+    var hasNew = newCardIndex < newQueue.length;
+    var hasDue = dueCardIndex < dueQueue.length;
+    var hasRegular = hasNew || hasDue;
 
     if (!hasRegular && learningQueue.length === 0) {
         showReviewComplete();
         return;
     }
 
-    // Find learning cards whose timer has elapsed
+    // Priority 1: Learning cards whose timer has elapsed (Anki always shows these first)
     var overdue = learningQueue.filter(function(item) { return item.showAfter <= now; });
     overdue.sort(function(a, b) { return a.showAfter - b.showAfter; });
 
     if (!hasRegular) {
-        // All regular cards done — show the earliest pending learning card (timer may not be up yet)
+        // All regular cards done — show the earliest pending learning card
         learningQueue.sort(function(a, b) { return a.showAfter - b.showAfter; });
         var item = learningQueue.shift();
         currentCard = item.card;
-        currentCardFromLearning = true;
+        currentCardSource = 'learning';
     } else if (overdue.length > 0) {
-        // A learning card's timer has elapsed — interleave it now (mirrors Anki behaviour)
+        // A learning card's timer has elapsed — show it immediately (highest priority)
         var item = overdue[0];
         learningQueue = learningQueue.filter(function(i) { return i !== item; });
         currentCard = item.card;
-        currentCardFromLearning = true;
+        currentCardSource = 'learning';
     } else {
-        // Timer hasn't fired for any learning card — show next regular card
-        currentCard = reviewQueue[currentCardIndex];
-        currentCardFromLearning = false;
+        // Priority 2: Dynamically pick from new or due queue based on study_order
+        var pickNew = false;
+        if (hasNew && !hasDue) {
+            pickNew = true;
+        } else if (!hasNew && hasDue) {
+            pickNew = false;
+        } else if (studyOrder === 'new_first') {
+            pickNew = true;
+        } else if (studyOrder === 'new_last') {
+            pickNew = false;
+        } else {
+            // 'mix' — Anki-style intersperser: evenly distribute new cards among due cards
+            pickNew = (newCardIndex + 1) * interspersionRatio <= (dueCardIndex + 1);
+        }
+        if (pickNew) {
+            currentCard = newQueue[newCardIndex];
+            currentCardSource = 'new';
+        } else {
+            currentCard = dueQueue[dueCardIndex];
+            currentCardSource = 'due';
+        }
     }
 
     document.getElementById('review-card-css').textContent = currentCard.css_style || '';
@@ -1046,6 +1104,7 @@ function showNextCard() {
     document.getElementById('review-back-container').style.display = 'none';
     document.getElementById('review-rating-buttons').style.display = 'none';
     document.getElementById('review-show-answer-btn').style.display = 'block';
+    updateReviewCounts();
 }
 
 function revealAnswer() {
@@ -1145,9 +1204,11 @@ function rateCard(rating) {
         bridge.submitRating(currentCard.id, rating);
     }
 
-    // Advance the regular-queue pointer only when the card being rated came from there
-    if (!currentCardFromLearning) {
-        currentCardIndex++;
+    // Advance the appropriate queue pointer
+    if (currentCardSource === 'new') {
+        newCardIndex++;
+    } else if (currentCardSource === 'due') {
+        dueCardIndex++;
     }
 
     showNextCard();

@@ -350,53 +350,62 @@ class AppBridge(QObject):
             new_cards.extend(batch)
             remaining_new -= len(batch)
 
-        if study_order == 'new_first':
-            combined = new_cards + due_cards
-        elif study_order == 'mix':
-            combined = [c for pair in zip(due_cards, new_cards) for c in pair]
-            combined += due_cards[len(new_cards):] + new_cards[len(due_cards):]
-        else:  # new_last
-            combined = due_cards + new_cards
+        # Space siblings apart within each queue: cards from the same note
+        # (identical fields_json) are separated so you never see a card and
+        # its reverse back-to-back.
+        def space_siblings(cards_list):
+            seen = set()
+            ordered = []
+            deferred = []
+            for c in cards_list:
+                key = c.fields_json or ''
+                if key in seen:
+                    deferred.append(c)
+                else:
+                    seen.add(key)
+                    ordered.append(c)
+            ordered.extend(deferred)
+            return ordered
 
-        # Space siblings apart: cards from the same note (identical fields_json)
-        # are kept in the session but separated so you never see a card and its
-        # reverse back-to-back.  First pass picks one card per note in order;
-        # deferred siblings are appended at the end.
-        seen_fields = set()
-        ordered = []
-        deferred = []
-        for c in combined:
-            key = c.fields_json or ''
-            if key in seen_fields:
-                deferred.append(c)
-            else:
-                seen_fields.add(key)
-                ordered.append(c)
-        ordered.extend(deferred)
+        new_cards = space_siblings(new_cards)
+        due_cards = space_siblings(due_cards)
+
         card_type_map = {ct.id: ct for ct in database.get_all_card_types()}
-        cards = []
-        for card in ordered:
-            ct = card_type_map.get(card.card_type_id)
-            try:
-                fields = json.loads(card.fields_json) if card.fields_json else {}
-            except (TypeError, ValueError):
-                fields = {}
-            cards.append({
-                'id': card.id,
-                'front': card.card_front,
-                'back': card.card_back,
-                'fields': fields,
-                'front_style': ct.front_style if ct else '',
-                'back_style': ct.back_style if ct else '',
-                'css_style': ct.css_style if ct else '',
-                'is_new': bool(card.is_new),
-                'is_relearning': not bool(card.is_new) and card.learning_step is not None,
-                'learning_step': card.learning_step,
-            })
+
+        def build_card_dicts(cards_list):
+            result = []
+            for card in cards_list:
+                ct = card_type_map.get(card.card_type_id)
+                try:
+                    fields = json.loads(card.fields_json) if card.fields_json else {}
+                except (TypeError, ValueError):
+                    fields = {}
+                result.append({
+                    'id': card.id,
+                    'front': card.card_front,
+                    'back': card.card_back,
+                    'fields': fields,
+                    'front_style': ct.front_style if ct else '',
+                    'back_style': ct.back_style if ct else '',
+                    'css_style': ct.css_style if ct else '',
+                    'is_new': bool(card.is_new),
+                    'is_relearning': not bool(card.is_new) and card.learning_step is not None,
+                    'learning_step': card.learning_step,
+                })
+            return result
+
         media_dir = database.BASE_DIR / 'data' / 'media'
         media_dir.mkdir(parents=True, exist_ok=True)
         media_base_url = QUrl.fromLocalFile(str(media_dir)).toString() + '/'
-        payload = json.dumps({'learning_steps': learning_steps, 'relearning_steps': relearning_steps, 'cards': cards, 'media_base_url': media_base_url, 'answer_display': answer_display})
+        payload = json.dumps({
+            'learning_steps': learning_steps,
+            'relearning_steps': relearning_steps,
+            'new_cards': build_card_dicts(new_cards),
+            'due_cards': build_card_dicts(due_cards),
+            'study_order': study_order,
+            'media_base_url': media_base_url,
+            'answer_display': answer_display,
+        })
         self.web_view.page().runJavaScript(f'updateReviewQueue({payload});')
 
     @pyqtSlot(int, int)

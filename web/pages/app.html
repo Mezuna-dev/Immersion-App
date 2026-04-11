@@ -475,8 +475,15 @@
                     <div id="review-inner" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
                         <!-- Card Section -->
                         <div id="review-card-section" style="flex: 1; overflow-y: auto; padding-bottom: 1rem;">
-                            <div class="mb-2">
-                                <h1 style="animation: fadeIn 0.6s ease;">Review</h1>
+                            <div class="mb-2" style="display: flex; align-items: center; justify-content: space-between;">
+                                <h1 style="animation: fadeIn 0.6s ease; margin: 0;">Review</h1>
+                                <div id="review-card-counts" style="display: flex; gap: 0.75rem; font-size: 1.1rem; font-weight: 600; animation: fadeIn 0.6s ease;">
+                                    <span id="review-count-new" title="New" style="color: #3498db;">0</span>
+                                    <span style="color: #555;">+</span>
+                                    <span id="review-count-learning" title="Learning" style="color: #e74c3c;">0</span>
+                                    <span style="color: #555;">+</span>
+                                    <span id="review-count-review" title="Review" style="color: #27ae60;">0</span>
+                                </div>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: center;">
                                 <div class="d-flex flex-column justify-content-center align-items-center">
