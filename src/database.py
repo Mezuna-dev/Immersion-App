@@ -164,6 +164,28 @@ def initialize_database():
                 )
         """)
 
+        # ImmersionCategory Table
+        cur.execute("""
+            CREATE TABLE ImmersionCategory (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Color TEXT NOT NULL DEFAULT '#9067C6',
+                Date_Created TEXT NOT NULL
+                )
+        """)
+
+        # ImmersionLog Table
+        cur.execute("""
+            CREATE TABLE ImmersionLog (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Category_ID INTEGER NOT NULL,
+                Duration_Seconds INTEGER NOT NULL,
+                Log_Date TEXT NOT NULL,
+                Date_Created TEXT NOT NULL,
+                FOREIGN KEY (Category_ID) REFERENCES ImmersionCategory(ID)
+                )
+        """)
+
         con.commit()
         con.close()
         seed_default_card_type()
@@ -199,6 +221,29 @@ def migrate_database():
             for pos, did in enumerate(ids):
                 cur.execute("UPDATE Deck SET Position = ? WHERE ID = ?", (pos, did))
         con.commit()
+
+    # Create ImmersionCategory table if missing (for existing DBs)
+    for tbl_stmt in [
+        """CREATE TABLE IF NOT EXISTS ImmersionCategory (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Color TEXT NOT NULL DEFAULT '#9067C6',
+            Date_Created TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS ImmersionLog (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Category_ID INTEGER NOT NULL,
+            Duration_Seconds INTEGER NOT NULL,
+            Log_Date TEXT NOT NULL,
+            Date_Created TEXT NOT NULL,
+            FOREIGN KEY (Category_ID) REFERENCES ImmersionCategory(ID)
+        )""",
+    ]:
+        try:
+            cur.execute(tbl_stmt)
+            con.commit()
+        except sqlite3.OperationalError:
+            pass
 
     con.close()
 
@@ -1024,3 +1069,143 @@ def clear_review_history():
     cur.execute("DELETE FROM Review")
     con.commit()
     con.close()
+
+
+# ===========================================================
+# Section: Immersion Functions
+# ===========================================================
+
+def create_immersion_category(name: str, color: str = '#9067C6') -> int:
+    creation_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO ImmersionCategory (Name, Color, Date_Created)
+        VALUES (?, ?, ?)
+    """, (name, color, creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+def get_all_immersion_categories() -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID, Name, Color, Date_Created FROM ImmersionCategory ORDER BY Name ASC")
+    rows = cur.fetchall()
+    con.close()
+    return [models.ImmersionCategory(r[0], r[1], r[2], r[3]) for r in rows]
+
+def update_immersion_category(cat_id: int, name: str, color: str):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE ImmersionCategory SET Name = ?, Color = ? WHERE ID = ?", (name, color, cat_id))
+    con.commit()
+    con.close()
+
+def delete_immersion_category(cat_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM ImmersionLog WHERE Category_ID = ?", (cat_id,))
+    cur.execute("DELETE FROM ImmersionCategory WHERE ID = ?", (cat_id,))
+    con.commit()
+    con.close()
+
+def create_immersion_log(category_id: int, duration_seconds: int, log_date: str = None) -> int:
+    if log_date is None:
+        log_date = get_srs_today().strftime('%Y-%m-%d')
+    creation_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO ImmersionLog (Category_ID, Duration_Seconds, Log_Date, Date_Created)
+        VALUES (?, ?, ?, ?)
+    """, (category_id, duration_seconds, log_date, creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+def delete_immersion_log(log_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM ImmersionLog WHERE ID = ?", (log_id,))
+    con.commit()
+    con.close()
+
+def get_immersion_stats(period: str = 'all_time') -> dict:
+    """Return per-category immersion totals for the given period."""
+    today = get_srs_today()
+    con = create_db_connection()
+    cur = con.cursor()
+
+    date_filter = ''
+    params = []
+    if period == 'today':
+        date_filter = 'AND l.Log_Date = ?'
+        params = [today.strftime('%Y-%m-%d')]
+    elif period == 'last_week':
+        start = (today - timedelta(days=6)).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'last_month':
+        start = (today - timedelta(days=29)).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'last_year':
+        start = (today - timedelta(days=364)).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+
+    cur.execute(f"""
+        SELECT c.ID, c.Name, c.Color, COALESCE(SUM(l.Duration_Seconds), 0)
+        FROM ImmersionCategory c
+        LEFT JOIN ImmersionLog l ON c.ID = l.Category_ID {date_filter}
+        GROUP BY c.ID
+        ORDER BY COALESCE(SUM(l.Duration_Seconds), 0) DESC
+    """, params)
+    rows = cur.fetchall()
+
+    # Also get total across all
+    cur.execute(f"""
+        SELECT COALESCE(SUM(l.Duration_Seconds), 0)
+        FROM ImmersionLog l
+        WHERE 1=1 {date_filter}
+    """, params)
+    total = cur.fetchone()[0]
+
+    con.close()
+
+    categories = []
+    for r in rows:
+        categories.append({
+            'id': r[0],
+            'name': r[1],
+            'color': r[2],
+            'total_seconds': r[3],
+        })
+
+    return {'categories': categories, 'total_seconds': total}
+
+def get_immersion_logs(category_id: int = None, limit: int = 50) -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    query = """
+        SELECT l.ID, l.Category_ID, c.Name, c.Color, l.Duration_Seconds, l.Log_Date, l.Date_Created
+        FROM ImmersionLog l
+        JOIN ImmersionCategory c ON l.Category_ID = c.ID
+    """
+    params = []
+    if category_id is not None:
+        query += " WHERE l.Category_ID = ?"
+        params.append(category_id)
+    query += " ORDER BY l.Date_Created DESC LIMIT ?"
+    params.append(limit)
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    con.close()
+    return [{
+        'id': r[0], 'category_id': r[1], 'category_name': r[2],
+        'category_color': r[3], 'duration_seconds': r[4],
+        'log_date': r[5], 'date_created': r[6],
+    } for r in rows]

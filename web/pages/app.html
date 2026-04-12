@@ -27,6 +27,7 @@
                     <div class="list-group sidebar-buttons">
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('dashboard')">Dashboard</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('srs')">SRS</a>
+                        <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('immersion')">Immersion</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('settings')">Settings</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('about')">About</a>
                     </div>
@@ -515,6 +516,131 @@
                     </div>
                 </div>
 
+                <!-- Immersion View -->
+                <div id="immersion-view" class="view-section view-hidden text-white">
+                    <h1 class="mb-4">Immersion</h1>
+
+                    <!-- Timer Card -->
+                    <div class="row mb-4">
+                        <div class="col-12" style="max-width: 560px;">
+                            <div class="card dash-card">
+                                <div class="card-body text-center">
+                                    <span class="dash-section-title">Timer</span>
+                                    <div id="immersion-timer-display" class="immersion-timer-display mt-3">00:00:00</div>
+                                    <div class="mt-3 mb-3">
+                                        <label class="form-label" style="font-size: 0.85rem; color: #888;">Category</label>
+                                        <select class="form-control dash-select mx-auto" id="immersion-timer-category" style="width: 16rem; font-size: 1rem;">
+                                            <option value="">— Select a category —</option>
+                                        </select>
+                                    </div>
+                                    <div class="d-flex justify-content-center gap-3">
+                                        <button id="immersion-start-btn" class="btn btn-dark btn-accent" onclick="immersionTimerStart()" style="width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Start</button>
+                                        <button id="immersion-pause-btn" class="btn btn-dark" onclick="immersionTimerPause()" style="width: 8rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important; display: none;">Pause</button>
+                                        <button id="immersion-resume-btn" class="btn btn-dark btn-accent" onclick="immersionTimerResume()" style="width: 8rem; height: 3rem; font-size: large; font-weight: 600; display: none;">Resume</button>
+                                        <button id="immersion-stop-btn" class="btn btn-dark" onclick="immersionTimerStop()" style="width: 8rem; height: 3rem; font-size: large; font-weight: 600; background-color: #c0392b !important; display: none;">Save</button>
+                                        <button id="immersion-discard-btn" class="btn btn-dark" onclick="immersionTimerDiscard()" style="width: 8rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important; display: none;">Discard</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Card -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card dash-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                        <span class="dash-section-title">Immersion Stats</span>
+                                        <select id="immersion-stats-period" class="form-select form-select-sm dash-select" onchange="fetchImmersionStats()">
+                                            <option value="all_time" selected>All Time</option>
+                                            <option value="today">Today</option>
+                                            <option value="last_week">Last Week</option>
+                                            <option value="last_month">Last Month</option>
+                                            <option value="last_year">Last Year</option>
+                                        </select>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-5 d-flex align-items-center justify-content-center">
+                                            <div id="immersion-pie-chart" style="width: 100%; height: 320px;"></div>
+                                        </div>
+                                        <div class="col-md-7">
+                                            <div class="mb-2" style="font-size: 0.85rem; color: #888;">
+                                                Total: <span id="immersion-total-time" class="text-white fw-bold" style="font-size: 1.1rem;">0h 0m</span>
+                                            </div>
+                                            <div id="immersion-stats-breakdown"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Logs + Categories side-by-side -->
+                    <div class="row mb-4">
+                        <!-- Recent Logs -->
+                        <div class="col-md-7 mb-4 mb-md-0">
+                            <div class="card dash-card" style="height: 100%;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <span class="dash-section-title">Recent Logs</span>
+                                        <button class="btn btn-dark btn-accent btn-sm" onclick="showManualLogForm()" style="font-weight: 600; font-size: 0.8rem;">+ Add Manual</button>
+                                    </div>
+                                    <div id="immersion-manual-log-form" style="display: none;" class="mb-3 p-3" style="background: #1e1b2e; border-radius: 8px;">
+                                        <div class="d-flex flex-wrap gap-2 align-items-end">
+                                            <div>
+                                                <label class="form-label" style="font-size: 0.78rem; color: #888;">Category</label>
+                                                <select class="form-control dash-select" id="manual-log-category" style="width: 12rem; font-size: 0.9rem;"></select>
+                                            </div>
+                                            <div>
+                                                <label class="form-label" style="font-size: 0.78rem; color: #888;">Hours</label>
+                                                <input type="number" class="form-control settings-input" id="manual-log-hours" min="0" value="0" style="width: 5rem; font-size: 0.9rem;">
+                                            </div>
+                                            <div>
+                                                <label class="form-label" style="font-size: 0.78rem; color: #888;">Minutes</label>
+                                                <input type="number" class="form-control settings-input" id="manual-log-minutes" min="0" max="59" value="0" style="width: 5rem; font-size: 0.9rem;">
+                                            </div>
+                                            <div>
+                                                <label class="form-label" style="font-size: 0.78rem; color: #888;">Date</label>
+                                                <input type="date" class="form-control settings-input" id="manual-log-date" style="width: 10rem; font-size: 0.9rem;">
+                                            </div>
+                                            <button class="btn btn-dark btn-accent btn-sm" onclick="submitManualLog()" style="font-weight: 600; height: 2.4rem;">Add</button>
+                                            <button class="btn btn-dark btn-sm" onclick="hideManualLogForm()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.4rem;">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div id="immersion-logs-list" style="max-height: 320px; overflow-y: auto;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Categories -->
+                        <div class="col-md-5">
+                            <div class="card dash-card" style="height: 100%;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <span class="dash-section-title">Categories</span>
+                                        <button class="btn btn-dark btn-accent btn-sm" onclick="showCreateCategoryForm()" style="font-weight: 600; font-size: 0.8rem;">+ New</button>
+                                    </div>
+                                    <div id="immersion-create-category-form" style="display: none;" class="mb-3">
+                                        <div class="d-flex gap-2 align-items-end">
+                                            <div style="flex: 1;">
+                                                <label class="form-label" style="font-size: 0.78rem; color: #888;">Name</label>
+                                                <input type="text" class="form-control settings-input" id="new-category-name" placeholder="e.g. Anime" style="font-size: 0.9rem;">
+                                            </div>
+                                            <div>
+                                                <label class="form-label" style="font-size: 0.78rem; color: #888;">Color</label>
+                                                <input type="color" id="new-category-color" value="#9067C6" style="width: 3rem; height: 2.4rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
+                                            </div>
+                                            <button class="btn btn-dark btn-accent btn-sm" onclick="submitCreateCategory()" style="font-weight: 600; height: 2.4rem;">Add</button>
+                                            <button class="btn btn-dark btn-sm" onclick="hideCreateCategoryForm()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.4rem;">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div id="immersion-category-list" style="max-height: 320px; overflow-y: auto;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Settings View -->
                 <div id="settings-view" class="view-section view-hidden text-white">
                     <h1 class="mb-4">Settings</h1>
@@ -634,7 +760,7 @@
                                 <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Immersion App</h2>
                             </div>
                             <p style="font-size: 1rem; opacity: 0.9; margin-bottom: 0.5rem;">
-                                A desktop application for spaced repetition flashcard study, immersion material tracking (Comming Soon), and review session management.
+                                A desktop application for spaced repetition flashcard study, immersion time tracking, and review session management.
                             </p>
                             <p style="font-size: 0.85rem; opacity: 0.6; margin-bottom: 0;">Version 1.2.0</p>
                         </div>
@@ -650,7 +776,7 @@
                                 <li>Anki deck import (.apkg)</li>
                                 <li>Custom card types and field templates</li>
                                 <li>Review statistics and activity heatmap</li>
-                                <li>Immersion time tracking(Coming Soon)</li>
+                                <li>Immersion time tracking with categories and stats</li>
                             </ul>
                         </div>
                     </div>

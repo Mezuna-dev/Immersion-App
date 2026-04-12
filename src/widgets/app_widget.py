@@ -483,6 +483,64 @@ class AppBridge(QObject):
             database.update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, due_date, 0)
             database.create_review(card_id, rating, new_interval, new_ease_factor)
 
+    # --- Immersion ---
+
+    @pyqtSlot(str, str)
+    def createImmersionCategory(self, name, color):
+        if name.strip():
+            database.create_immersion_category(name.strip(), color or '#9067C6')
+        self.getImmersionCategories()
+
+    @pyqtSlot()
+    def getImmersionCategories(self):
+        cats = database.get_all_immersion_categories()
+        payload = json.dumps([{
+            'id': c.id, 'name': c.name, 'color': c.color, 'date_created': c.date_created
+        } for c in cats])
+        self.web_view.page().runJavaScript(f'updateImmersionCategories({payload});')
+
+    @pyqtSlot(int, str, str)
+    def updateImmersionCategory(self, cat_id, name, color):
+        if name.strip():
+            database.update_immersion_category(cat_id, name.strip(), color)
+        self.getImmersionCategories()
+
+    @pyqtSlot(int)
+    def deleteImmersionCategory(self, cat_id):
+        database.delete_immersion_category(cat_id)
+        self.getImmersionCategories()
+
+    @pyqtSlot(int, int)
+    def saveImmersionLog(self, category_id, duration_seconds):
+        if duration_seconds > 0:
+            database.create_immersion_log(category_id, duration_seconds)
+        self.getImmersionStats('all_time')
+        self.getImmersionLogs()
+
+    @pyqtSlot(int, int, str)
+    def addManualImmersionLog(self, category_id, duration_seconds, log_date):
+        if duration_seconds > 0:
+            database.create_immersion_log(category_id, duration_seconds, log_date or None)
+        self.getImmersionStats('all_time')
+        self.getImmersionLogs()
+
+    @pyqtSlot(int)
+    def deleteImmersionLog(self, log_id):
+        database.delete_immersion_log(log_id)
+        self.getImmersionStats('all_time')
+        self.getImmersionLogs()
+
+    @pyqtSlot(str)
+    def getImmersionStats(self, period):
+        stats = database.get_immersion_stats(period or 'all_time')
+        self.web_view.page().runJavaScript(f'updateImmersionStats({json.dumps(stats)});')
+
+    @pyqtSlot()
+    def getImmersionLogs(self):
+        logs = database.get_immersion_logs()
+        self.web_view.page().runJavaScript(f'updateImmersionLogs({json.dumps(logs)});')
+
+
 class AppWidget(QWidget):
     def __init__(self):
         super().__init__()

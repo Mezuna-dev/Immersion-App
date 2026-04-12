@@ -257,6 +257,11 @@ function showView(viewId) {
         if (decks.length === 0) bridge.getDecks();
         else populateCardDeckSelect();
     }
+    if (viewId === 'immersion' && bridge) {
+        bridge.getImmersionCategories();
+        fetchImmersionStats();
+        bridge.getImmersionLogs();
+    }
 }
 
 function updateStats(due, newCards) {
@@ -2118,4 +2123,358 @@ function savePreviewStyling() {
         showAlert('Styling saved.');
         showView('edit-card');
     }
+}
+
+
+// ===========================================================
+// Immersion Section
+// ===========================================================
+
+var immersionCategories = [];
+var immersionTimerInterval = null;
+var immersionTimerSeconds = 0;
+var immersionTimerRunning = false;
+var immersionTimerPaused = false;
+
+// --- Timer ---
+
+function immersionTimerStart() {
+    var catSelect = document.getElementById('immersion-timer-category');
+    if (!catSelect.value) {
+        showAlert('Please select a category first.');
+        return;
+    }
+    immersionTimerSeconds = 0;
+    immersionTimerRunning = true;
+    immersionTimerPaused = false;
+    updateTimerDisplay();
+    updateTimerButtons('running');
+    document.getElementById('immersion-timer-display').classList.add('running');
+    document.getElementById('immersion-timer-display').classList.remove('paused');
+    catSelect.disabled = true;
+    immersionTimerInterval = setInterval(function() {
+        immersionTimerSeconds++;
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function immersionTimerPause() {
+    if (immersionTimerInterval) clearInterval(immersionTimerInterval);
+    immersionTimerRunning = false;
+    immersionTimerPaused = true;
+    updateTimerButtons('paused');
+    document.getElementById('immersion-timer-display').classList.remove('running');
+    document.getElementById('immersion-timer-display').classList.add('paused');
+}
+
+function immersionTimerResume() {
+    immersionTimerRunning = true;
+    immersionTimerPaused = false;
+    updateTimerButtons('running');
+    document.getElementById('immersion-timer-display').classList.add('running');
+    document.getElementById('immersion-timer-display').classList.remove('paused');
+    immersionTimerInterval = setInterval(function() {
+        immersionTimerSeconds++;
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function immersionTimerStop() {
+    if (immersionTimerInterval) clearInterval(immersionTimerInterval);
+    var catId = parseInt(document.getElementById('immersion-timer-category').value);
+    if (bridge && immersionTimerSeconds > 0) {
+        bridge.saveImmersionLog(catId, immersionTimerSeconds);
+    }
+    immersionTimerReset();
+}
+
+function immersionTimerDiscard() {
+    if (immersionTimerInterval) clearInterval(immersionTimerInterval);
+    immersionTimerReset();
+}
+
+function immersionTimerReset() {
+    immersionTimerSeconds = 0;
+    immersionTimerRunning = false;
+    immersionTimerPaused = false;
+    immersionTimerInterval = null;
+    updateTimerDisplay();
+    updateTimerButtons('idle');
+    var display = document.getElementById('immersion-timer-display');
+    display.classList.remove('running', 'paused');
+    document.getElementById('immersion-timer-category').disabled = false;
+}
+
+function updateTimerDisplay() {
+    var h = Math.floor(immersionTimerSeconds / 3600);
+    var m = Math.floor((immersionTimerSeconds % 3600) / 60);
+    var s = immersionTimerSeconds % 60;
+    var display = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    document.getElementById('immersion-timer-display').textContent = display;
+}
+
+function updateTimerButtons(state) {
+    var startBtn = document.getElementById('immersion-start-btn');
+    var pauseBtn = document.getElementById('immersion-pause-btn');
+    var resumeBtn = document.getElementById('immersion-resume-btn');
+    var stopBtn = document.getElementById('immersion-stop-btn');
+    var discardBtn = document.getElementById('immersion-discard-btn');
+    startBtn.style.display = state === 'idle' ? '' : 'none';
+    pauseBtn.style.display = state === 'running' ? '' : 'none';
+    resumeBtn.style.display = state === 'paused' ? '' : 'none';
+    stopBtn.style.display = (state === 'running' || state === 'paused') ? '' : 'none';
+    discardBtn.style.display = (state === 'running' || state === 'paused') ? '' : 'none';
+}
+
+// --- Categories ---
+
+function updateImmersionCategories(cats) {
+    immersionCategories = cats;
+    populateImmersionCategorySelects();
+    renderImmersionCategoryList();
+}
+
+function populateImmersionCategorySelects() {
+    // Timer select
+    var timerSel = document.getElementById('immersion-timer-category');
+    var timerVal = timerSel.value;
+    timerSel.innerHTML = '<option value="">— Select a category —</option>';
+    immersionCategories.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        timerSel.appendChild(opt);
+    });
+    if (timerVal) timerSel.value = timerVal;
+
+    // Manual log select
+    var manualSel = document.getElementById('manual-log-category');
+    if (manualSel) {
+        var manualVal = manualSel.value;
+        manualSel.innerHTML = '';
+        immersionCategories.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            manualSel.appendChild(opt);
+        });
+        if (manualVal) manualSel.value = manualVal;
+    }
+}
+
+function renderImmersionCategoryList() {
+    var container = document.getElementById('immersion-category-list');
+    if (!immersionCategories.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No categories yet. Create one to get started.</p>';
+        return;
+    }
+    var html = '';
+    immersionCategories.forEach(function(c) {
+        html += '<div class="immersion-category-row" id="cat-row-' + c.id + '">'
+            + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
+            + '<span style="flex: 1; font-size: 0.92rem; color: #fff;">' + escapeHtml(c.name) + '</span>'
+            + '<button class="btn btn-sm" onclick="editImmersionCategory(' + c.id + ')" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Edit</button>'
+            + '<button class="btn btn-sm" onclick="deleteImmersionCategory(' + c.id + ', \'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')" style="color: #e74c3c; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Delete</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function showCreateCategoryForm() {
+    document.getElementById('immersion-create-category-form').style.display = '';
+    document.getElementById('new-category-name').value = '';
+    document.getElementById('new-category-color').value = currentAccent;
+    document.getElementById('new-category-name').focus();
+}
+
+function hideCreateCategoryForm() {
+    document.getElementById('immersion-create-category-form').style.display = 'none';
+}
+
+function submitCreateCategory() {
+    var name = document.getElementById('new-category-name').value.trim();
+    var color = document.getElementById('new-category-color').value;
+    if (!name) { showAlert('Please enter a category name.'); return; }
+    if (bridge) bridge.createImmersionCategory(name, color);
+    hideCreateCategoryForm();
+}
+
+function editImmersionCategory(catId) {
+    var cat = immersionCategories.find(function(c) { return c.id === catId; });
+    if (!cat) return;
+    var row = document.getElementById('cat-row-' + catId);
+    row.innerHTML = '<input type="color" id="edit-cat-color-' + catId + '" value="' + cat.color + '" style="width: 2rem; height: 2rem; border: none; border-radius: 4px; cursor: pointer; padding: 1px; background: none;">'
+        + '<input type="text" id="edit-cat-name-' + catId + '" value="' + escapeHtml(cat.name) + '" class="form-control settings-input" style="flex: 1; font-size: 0.88rem; height: 2rem; padding: 0.2rem 0.5rem;">'
+        + '<button class="btn btn-sm btn-accent" onclick="saveEditCategory(' + catId + ')" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; font-weight: 600;">Save</button>'
+        + '<button class="btn btn-sm" onclick="renderImmersionCategoryList()" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Cancel</button>';
+    document.getElementById('edit-cat-name-' + catId).focus();
+}
+
+function saveEditCategory(catId) {
+    var name = document.getElementById('edit-cat-name-' + catId).value.trim();
+    var color = document.getElementById('edit-cat-color-' + catId).value;
+    if (!name) { showAlert('Category name cannot be empty.'); return; }
+    if (bridge) bridge.updateImmersionCategory(catId, name, color);
+}
+
+function deleteImmersionCategory(catId, catName) {
+    showConfirm('Delete category "' + catName + '" and all its logs? This cannot be undone.', function() {
+        if (bridge) bridge.deleteImmersionCategory(catId);
+    });
+}
+
+// --- Stats ---
+
+function fetchImmersionStats() {
+    var period = document.getElementById('immersion-stats-period').value;
+    if (bridge) bridge.getImmersionStats(period);
+}
+
+function formatDuration(totalSeconds) {
+    var h = Math.floor(totalSeconds / 3600);
+    var m = Math.floor((totalSeconds % 3600) / 60);
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+}
+
+function updateImmersionStats(stats) {
+    // Total time
+    document.getElementById('immersion-total-time').textContent = formatDuration(stats.total_seconds);
+
+    // Breakdown list
+    var container = document.getElementById('immersion-stats-breakdown');
+    if (!stats.categories.length || stats.total_seconds === 0) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No immersion data for this period.</p>';
+        renderImmersionPieChart([], []);
+        return;
+    }
+
+    var html = '';
+    stats.categories.forEach(function(c) {
+        if (c.total_seconds === 0) return;
+        var pct = stats.total_seconds > 0 ? (c.total_seconds / stats.total_seconds * 100) : 0;
+        html += '<div class="immersion-stat-row">'
+            + '<div class="d-flex justify-content-between align-items-center">'
+            + '<div class="d-flex align-items-center gap-2">'
+            + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
+            + '<span style="font-size: 0.9rem; color: #fff;">' + escapeHtml(c.name) + '</span>'
+            + '</div>'
+            + '<div style="text-align: right;">'
+            + '<span style="font-size: 0.9rem; font-weight: 600; color: #fff;">' + formatDuration(c.total_seconds) + '</span>'
+            + '<span style="font-size: 0.78rem; color: #888; margin-left: 0.5rem;">' + pct.toFixed(1) + '%</span>'
+            + '</div>'
+            + '</div>'
+            + '<div class="immersion-stat-bar"><div class="immersion-stat-bar-fill" style="width: ' + pct + '%; background-color: ' + c.color + ';"></div></div>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+
+    // Pie chart
+    var labels = [];
+    var values = [];
+    var colors = [];
+    stats.categories.forEach(function(c) {
+        if (c.total_seconds > 0) {
+            labels.push(c.name);
+            values.push(c.total_seconds);
+            colors.push(c.color);
+        }
+    });
+    renderImmersionPieChart(labels, values, colors);
+}
+
+function renderImmersionPieChart(labels, values, colors) {
+    var chartEl = document.getElementById('immersion-pie-chart');
+    if (!labels.length) {
+        chartEl.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888; font-size: 0.9rem;">No data</div>';
+        return;
+    }
+
+    // Format hover text to show duration instead of raw seconds
+    var hoverText = values.map(function(v) { return formatDuration(v); });
+
+    var data = [{
+        labels: labels,
+        values: values,
+        type: 'pie',
+        hole: 0.5,
+        marker: { colors: colors },
+        textinfo: 'percent',
+        textfont: { color: '#fff', size: 12 },
+        hoverinfo: 'label+text+percent',
+        text: hoverText,
+        sort: false,
+    }];
+    var layout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        margin: { t: 10, b: 10, l: 10, r: 10 },
+        showlegend: false,
+        font: { family: 'Inter, sans-serif', color: '#fff' },
+    };
+    Plotly.newPlot(chartEl, data, layout, { displayModeBar: false, responsive: true });
+}
+
+// --- Logs ---
+
+function updateImmersionLogs(logs) {
+    var container = document.getElementById('immersion-logs-list');
+    if (!logs.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No logs yet. Start the timer or add a manual entry.</p>';
+        return;
+    }
+    var html = '';
+    logs.forEach(function(log) {
+        html += '<div class="immersion-log-row">'
+            + '<span class="immersion-color-dot" style="background-color: ' + log.category_color + ';"></span>'
+            + '<span style="flex: 1; color: #ddd;">' + escapeHtml(log.category_name) + '</span>'
+            + '<span style="font-weight: 600; color: #fff; min-width: 5rem; text-align: right;">' + formatDuration(log.duration_seconds) + '</span>'
+            + '<span style="color: #888; min-width: 6.5rem; text-align: right; font-size: 0.8rem;">' + log.log_date + '</span>'
+            + '<button class="btn btn-sm" onclick="deleteImmersionLog(' + log.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function deleteImmersionLog(logId) {
+    showConfirm('Delete this immersion log?', function() {
+        if (bridge) bridge.deleteImmersionLog(logId);
+    });
+}
+
+// --- Manual Log ---
+
+function showManualLogForm() {
+    document.getElementById('immersion-manual-log-form').style.display = '';
+    document.getElementById('manual-log-hours').value = '0';
+    document.getElementById('manual-log-minutes').value = '0';
+    // Set default date to today
+    var today = new Date();
+    var yyyy = today.getFullYear();
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('manual-log-date').value = yyyy + '-' + mm + '-' + dd;
+}
+
+function hideManualLogForm() {
+    document.getElementById('immersion-manual-log-form').style.display = 'none';
+}
+
+function submitManualLog() {
+    var catId = parseInt(document.getElementById('manual-log-category').value);
+    var hours = parseInt(document.getElementById('manual-log-hours').value) || 0;
+    var minutes = parseInt(document.getElementById('manual-log-minutes').value) || 0;
+    var logDate = document.getElementById('manual-log-date').value;
+    var totalSeconds = (hours * 3600) + (minutes * 60);
+    if (!catId) { showAlert('Please select a category.'); return; }
+    if (totalSeconds <= 0) { showAlert('Please enter a duration greater than 0.'); return; }
+    if (!logDate) { showAlert('Please select a date.'); return; }
+    if (bridge) bridge.addManualImmersionLog(catId, totalSeconds, logDate);
+    hideManualLogForm();
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
