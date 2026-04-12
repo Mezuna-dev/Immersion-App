@@ -27,6 +27,7 @@ function applyAppSettings(settings) {
         learning_steps: settings.default_learning_steps || '1 10',
         relearning_steps: settings.default_relearning_steps || '10',
         study_order: settings.default_study_order || 'new_first',
+        day_start_hour: settings.day_start_hour !== undefined ? settings.day_start_hour : 4,
     };
     currentReviewBehavior = {
         autoplay_audio: settings.review_autoplay_audio !== undefined ? settings.review_autoplay_audio : true,
@@ -37,7 +38,7 @@ function applyAppSettings(settings) {
     applyRatingButtonMode();
 }
 
-var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first' };
+var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first', day_start_hour: 4 };
 var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space', two_button_mode: false };
 var capturingKey = false;
 
@@ -85,6 +86,17 @@ function showAppSettings() {
     document.getElementById('srs-default-learning-steps').value = currentSRSDefaults.learning_steps;
     document.getElementById('srs-default-relearning-steps').value = currentSRSDefaults.relearning_steps;
     document.getElementById('srs-default-study-order').value = currentSRSDefaults.study_order;
+    var hourSelect = document.getElementById('srs-day-start-hour');
+    if (hourSelect.options.length === 0) {
+        for (var h = 0; h < 24; h++) {
+            var opt = document.createElement('option');
+            opt.value = h;
+            var ampm = h === 0 ? '12:00 AM' : h < 12 ? h + ':00 AM' : h === 12 ? '12:00 PM' : (h - 12) + ':00 PM';
+            opt.textContent = ampm;
+            hourSelect.appendChild(opt);
+        }
+    }
+    hourSelect.value = currentSRSDefaults.day_start_hour;
     document.getElementById('review-autoplay-audio').checked = currentReviewBehavior.autoplay_audio;
     document.getElementById('review-shortcut-enabled').checked = currentReviewBehavior.shortcut_enabled;
     document.getElementById('shortcut-key-btn').textContent = getKeyDisplayName(currentReviewBehavior.shortcut_key);
@@ -133,6 +145,7 @@ function buildSettings(overrides) {
         default_learning_steps: currentSRSDefaults.learning_steps,
         default_relearning_steps: currentSRSDefaults.relearning_steps,
         default_study_order: currentSRSDefaults.study_order,
+        day_start_hour: currentSRSDefaults.day_start_hour,
         review_autoplay_audio: currentReviewBehavior.autoplay_audio,
         review_shortcut_enabled: currentReviewBehavior.shortcut_enabled,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
@@ -149,6 +162,7 @@ function saveAppSettings() {
         default_learning_steps: document.getElementById('srs-default-learning-steps').value.trim() || '1 10',
         default_relearning_steps: document.getElementById('srs-default-relearning-steps').value.trim() || '10',
         default_study_order: document.getElementById('srs-default-study-order').value,
+        day_start_hour: parseInt(document.getElementById('srs-day-start-hour').value, 10),
         review_autoplay_audio: document.getElementById('review-autoplay-audio').checked,
         review_shortcut_enabled: document.getElementById('review-shortcut-enabled').checked,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
@@ -171,6 +185,7 @@ function resetSRSDefaults() {
         default_learning_steps: '1 10',
         default_relearning_steps: '10',
         default_study_order: 'new_first',
+        day_start_hour: 4,
     });
     applyAppSettings(settings);
     showAppSettings();

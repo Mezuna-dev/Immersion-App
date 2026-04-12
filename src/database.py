@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime, timedelta
 import sqlite3
 import json
 import models
@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
     'review_shortcut_enabled': True,
     'review_shortcut_key': 'Space',
     'review_two_button_mode': False,
+    'day_start_hour': 4,
 }
 
 def get_app_settings() -> dict:
@@ -51,6 +52,21 @@ def get_app_settings() -> dict:
 def save_app_settings(settings: dict):
     with open(SETTINGS_PATH, 'w') as f:
         json.dump(settings, f, indent=2)
+
+def get_srs_today() -> date:
+    """Return the current SRS day based on the day_start_hour setting.
+
+    If the current time is before day_start_hour, the SRS day is still
+    yesterday.  For example with day_start_hour=4, reviews done at 2 AM
+    count toward the previous day and cards due "today" are those due by
+    yesterday's date.
+    """
+    settings = get_app_settings()
+    hour = settings.get('day_start_hour', 4)
+    now = datetime.now()
+    if now.hour < hour:
+        return (now - timedelta(days=1)).date()
+    return now.date()
 
 def create_db_connection():
     con = sqlite3.connect(DB_PATH)
@@ -467,7 +483,7 @@ def get_card_by_id(id):
         return card
     
 def get_due_cards(deck_id=None, deck_ids=None):
-    todays_date = date.today().strftime('%Y-%m-%d')
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
 
     con = create_db_connection()
     cur = con.cursor()
@@ -624,7 +640,7 @@ def update_card_fields(card_id: int, deck_id: int, card_type_id: int, fields_jso
     con.close()
 
 def update_card_learning_step(card_id: int, learning_step: int):
-    today = date.today().strftime('%Y-%m-%d')
+    today = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
@@ -634,7 +650,7 @@ def update_card_learning_step(card_id: int, learning_step: int):
     con.close()
 
 def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, new_due_date, is_new):
-    todays_date = date.today().strftime('%Y-%m-%d')
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
@@ -687,7 +703,7 @@ def get_mature_card_count(deck_id=None):
 
 def get_all_deck_stats():
     """Fetch per-deck card counts in a single query instead of N+1 queries per deck."""
-    todays_date = date.today().strftime('%Y-%m-%d')
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
@@ -717,7 +733,7 @@ def get_all_deck_stats():
 # --- Review Functions --------------------------------
 
 def get_new_cards_introduced_today(deck_id=None, deck_ids=None):
-    todays_date = date.today().strftime('%Y-%m-%d')
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
@@ -763,7 +779,7 @@ def get_new_cards_introduced_today(deck_id=None, deck_ids=None):
     return count
 
 def create_review(card_id, rating, interval_after, ease_factor_after):
-    review_date = date.today().strftime('%Y-%m-%d')
+    review_date = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
@@ -835,8 +851,7 @@ def export_all_data() -> dict:
 
 
 def get_daily_review_counts(deck_id=None) -> dict:
-    from datetime import date, timedelta
-    today = date.today()
+    today = get_srs_today()
     start = today - timedelta(days=364)
 
     con = create_db_connection()

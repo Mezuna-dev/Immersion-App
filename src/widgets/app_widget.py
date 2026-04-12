@@ -181,8 +181,8 @@ class AppBridge(QObject):
 
     @pyqtSlot(str, str)
     def getRetentionStats(self, deck_id_str, period):
-        from datetime import date, timedelta
-        today = date.today()
+        from datetime import timedelta
+        today = database.get_srs_today()
         if period == 'today':
             start = end = today.strftime('%Y-%m-%d')
         elif period == 'yesterday':
@@ -466,7 +466,8 @@ class AppBridge(QObject):
         card = database.get_card_by_id(card_id)
         if card:
             new_reps, new_ease_factor, new_interval, due_date = scheduler.calculate_next_review(
-                card.reps, card.ease_factor, card.interval, rating
+                card.reps, card.ease_factor, card.interval, rating,
+                reference_date=database.get_srs_today()
             )
             database.update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, due_date, 0)
             database.create_review(card_id, rating, new_interval, new_ease_factor)
