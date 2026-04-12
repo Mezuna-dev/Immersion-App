@@ -157,6 +157,10 @@
                             <h2 class="settings-section-title">General</h2>
                             <label class="form-label settings-label" for="deck-name">Deck Name</label>
                             <input type="text" class="form-control settings-input" id="deck-name" placeholder="Enter deck name">
+                            <label class="form-label settings-label" for="deck-parent-select" style="margin-top: 1.25rem;">Parent Deck</label>
+                            <select class="form-control settings-input settings-select" id="deck-parent-select">
+                                <option value="0">None (top level)</option>
+                            </select>
                             <label class="form-label settings-label" for="deck-description" style="margin-top: 1.25rem;">Description</label>
                             <textarea class="form-control settings-input" id="deck-description" placeholder="Optional" style="height: 120px; resize: vertical;"></textarea>
                         </div>
@@ -181,6 +185,10 @@
                             <h2 class="settings-section-title">General</h2>
                             <label class="form-label settings-label" for="settings-deck-name-input">Deck name</label>
                             <input type="text" class="form-control settings-input" id="settings-deck-name-input">
+                            <label class="form-label settings-label" for="settings-deck-parent-select" style="margin-top: 1.25rem;">Parent Deck</label>
+                            <select class="form-control settings-input settings-select" id="settings-deck-parent-select">
+                                <option value="0">None (top level)</option>
+                            </select>
                             <label class="form-label settings-label" for="settings-deck-description-input" style="margin-top: 1.25rem;">Description</label>
                             <textarea class="form-control settings-input" id="settings-deck-description-input" placeholder="Optional"
                                       style="height: 80px; resize: vertical;"></textarea>
@@ -467,8 +475,15 @@
                     <div id="review-inner" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
                         <!-- Card Section -->
                         <div id="review-card-section" style="flex: 1; overflow-y: auto; padding-bottom: 1rem;">
-                            <div class="mb-2">
-                                <h1 style="animation: fadeIn 0.6s ease;">Review</h1>
+                            <div class="mb-2" style="display: flex; align-items: center; justify-content: space-between;">
+                                <h1 style="animation: fadeIn 0.6s ease; margin: 0;">Review</h1>
+                                <div id="review-card-counts" style="display: flex; gap: 0.75rem; font-size: 1.1rem; font-weight: 600; animation: fadeIn 0.6s ease;">
+                                    <span id="review-count-new" title="New" style="color: #3498db;">0</span>
+                                    <span style="color: #555;">+</span>
+                                    <span id="review-count-learning" title="Learning" style="color: #e74c3c;">0</span>
+                                    <span style="color: #555;">+</span>
+                                    <span id="review-count-review" title="Review" style="color: #27ae60;">0</span>
+                                </div>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: center;">
                                 <div class="d-flex flex-column justify-content-center align-items-center">
@@ -485,10 +500,10 @@
                         <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0; border-top: 1px solid #3a3555;">
                             <button id="review-show-answer-btn" class="btn btn-dark btn-accent" onclick="revealAnswer()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; animation: fadeIn 0.6s ease;">Show Answer</button>
                             <div id="review-rating-buttons" style="display: none; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                                <button class="btn btn-dark" onclick="rateCard(1)" style="background-color: #c0392b; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Again</button>
-                                <button class="btn btn-dark" onclick="rateCard(3)" style="background-color: #e67e22; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Hard</button>
-                                <button class="btn btn-dark" onclick="rateCard(4)" style="background-color: #27ae60; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Good</button>
-                                <button class="btn btn-dark" onclick="rateCard(5)" style="background-color: #2980b9; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Easy</button>
+                                <button class="btn btn-dark" onclick="rateCard(1)" style="background-color: #3a3555 !important; color: #c0392b; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Again</button>
+                                <button class="btn btn-dark" onclick="rateCard(3)" style="background-color: #3a3555 !important; color: #e67e22; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Hard</button>
+                                <button class="btn btn-dark" onclick="rateCard(4)" style="background-color: #3a3555 !important; color: #27ae60; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Good</button>
+                                <button class="btn btn-dark" onclick="rateCard(5)" style="background-color: #3a3555 !important; color: var(--accent); width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Easy</button>
                             </div>
                         </div>
                     <!-- Complete Section -->
@@ -548,6 +563,10 @@
                                 <option value="mix">Mix with reviews</option>
                             </select>
                             <small class="settings-hint">Order in which new cards appear relative to due reviews.</small>
+                            <label class="form-label settings-label" for="srs-day-start-hour" style="margin-top: 1.25rem;">Next day starts at</label>
+                            <select class="form-control settings-input settings-select" id="srs-day-start-hour" style="width: 14rem;">
+                            </select>
+                            <small class="settings-hint">Hour when the new review day begins. Reviews done before this hour count toward the previous day.</small>
                         </div>
                     </div>
                     <div class="d-flex mb-5" style="gap: 0.75rem;">
@@ -568,6 +587,11 @@
                                 <label class="form-check-label settings-label" for="review-shortcut-enabled" style="cursor: pointer;">Answer shortcut key</label>
                             </div>
                             <small class="settings-hint" style="margin-bottom: 0.75rem; display: block;">Press the shortcut to show the answer, press again to rate Good.</small>
+                            <div class="form-check form-switch mb-1" style="margin-top: 1.25rem;">
+                                <input class="form-check-input" type="checkbox" id="review-two-button-mode" style="cursor: pointer;">
+                                <label class="form-check-label settings-label" for="review-two-button-mode" style="cursor: pointer;">Two-button mode</label>
+                            </div>
+                            <small class="settings-hint" style="margin-bottom: 1.5rem; display: block;">Show only Again and Good buttons during review.</small>
                             <div class="d-flex align-items-center gap-3">
                                 <button id="shortcut-key-btn" onclick="startKeyCapture()"
                                         style="padding: 5px 18px; background-color: #1e1b2e; color: white; border: 1px solid #4a4060; border-radius: 6px; cursor: pointer; font-family: monospace; font-size: 1.1rem; min-width: 7rem; text-align: center;">Space</button>
@@ -612,7 +636,7 @@
                             <p style="font-size: 1rem; opacity: 0.9; margin-bottom: 0.5rem;">
                                 A desktop application for spaced repetition flashcard study, immersion material tracking (Comming Soon), and review session management.
                             </p>
-                            <p style="font-size: 0.85rem; opacity: 0.6; margin-bottom: 0;">Version 1.1.0</p>
+                            <p style="font-size: 0.85rem; opacity: 0.6; margin-bottom: 0;">Version 1.2.0</p>
                         </div>
                     </div>
  

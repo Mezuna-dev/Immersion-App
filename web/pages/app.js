@@ -5,7 +5,9 @@ var fieldCounter = 0;
 var createCardPreselectedDeckId = null;
 var currentAccent = '#9067C6';
 var currentFontSize = 'medium';
-var FONT_SIZE_MAP = { small: '1.8rem', medium: '2.5rem', large: '3.5rem' };
+var FONT_SIZE_MAP = { small: '1.5rem', medium: '2.5rem', large: '4rem' };
+var collapsedDecks = new Set();
+var deckCollapseInitialized = false;
 
 new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge = channel.objects.bridge;
@@ -25,16 +27,19 @@ function applyAppSettings(settings) {
         learning_steps: settings.default_learning_steps || '1 10',
         relearning_steps: settings.default_relearning_steps || '10',
         study_order: settings.default_study_order || 'new_first',
+        day_start_hour: settings.day_start_hour !== undefined ? settings.day_start_hour : 4,
     };
     currentReviewBehavior = {
         autoplay_audio: settings.review_autoplay_audio !== undefined ? settings.review_autoplay_audio : true,
         shortcut_enabled: settings.review_shortcut_enabled !== undefined ? settings.review_shortcut_enabled : true,
         shortcut_key: settings.review_shortcut_key || 'Space',
+        two_button_mode: settings.review_two_button_mode || false,
     };
+    applyRatingButtonMode();
 }
 
-var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first' };
-var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space' };
+var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first', day_start_hour: 4 };
+var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space', two_button_mode: false };
 var capturingKey = false;
 
 function getKeyDisplayName(code) {
@@ -81,9 +86,21 @@ function showAppSettings() {
     document.getElementById('srs-default-learning-steps').value = currentSRSDefaults.learning_steps;
     document.getElementById('srs-default-relearning-steps').value = currentSRSDefaults.relearning_steps;
     document.getElementById('srs-default-study-order').value = currentSRSDefaults.study_order;
+    var hourSelect = document.getElementById('srs-day-start-hour');
+    if (hourSelect.options.length === 0) {
+        for (var h = 0; h < 24; h++) {
+            var opt = document.createElement('option');
+            opt.value = h;
+            var ampm = h === 0 ? '12:00 AM' : h < 12 ? h + ':00 AM' : h === 12 ? '12:00 PM' : (h - 12) + ':00 PM';
+            opt.textContent = ampm;
+            hourSelect.appendChild(opt);
+        }
+    }
+    hourSelect.value = currentSRSDefaults.day_start_hour;
     document.getElementById('review-autoplay-audio').checked = currentReviewBehavior.autoplay_audio;
     document.getElementById('review-shortcut-enabled').checked = currentReviewBehavior.shortcut_enabled;
     document.getElementById('shortcut-key-btn').textContent = getKeyDisplayName(currentReviewBehavior.shortcut_key);
+    document.getElementById('review-two-button-mode').checked = currentReviewBehavior.two_button_mode;
 }
 
 function formatBytes(bytes) {
@@ -106,6 +123,20 @@ function previewAccent(color) {
     document.getElementById('settings-accent-hex').textContent = color;
 }
 
+function applyRatingButtonMode() {
+    var container = document.getElementById('review-rating-buttons');
+    if (!container) return;
+    var buttons = container.querySelectorAll('button');
+    var twoBtn = currentReviewBehavior.two_button_mode;
+    // buttons order: Again(1), Hard(3), Good(4), Easy(5)
+    if (buttons.length >= 4) {
+        buttons[1].style.display = twoBtn ? 'none' : '';  // Hard
+        buttons[3].style.display = twoBtn ? 'none' : '';  // Easy
+        // In two-button mode, Good gets accent color text; in four-button mode, Good is green text
+        buttons[2].style.color = twoBtn ? 'var(--accent)' : '#27ae60';
+    }
+}
+
 function buildSettings(overrides) {
     return Object.assign({
         accent_color: currentAccent,
@@ -114,9 +145,11 @@ function buildSettings(overrides) {
         default_learning_steps: currentSRSDefaults.learning_steps,
         default_relearning_steps: currentSRSDefaults.relearning_steps,
         default_study_order: currentSRSDefaults.study_order,
+        day_start_hour: currentSRSDefaults.day_start_hour,
         review_autoplay_audio: currentReviewBehavior.autoplay_audio,
         review_shortcut_enabled: currentReviewBehavior.shortcut_enabled,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
+        review_two_button_mode: currentReviewBehavior.two_button_mode,
     }, overrides);
 }
 
@@ -129,9 +162,11 @@ function saveAppSettings() {
         default_learning_steps: document.getElementById('srs-default-learning-steps').value.trim() || '1 10',
         default_relearning_steps: document.getElementById('srs-default-relearning-steps').value.trim() || '10',
         default_study_order: document.getElementById('srs-default-study-order').value,
+        day_start_hour: parseInt(document.getElementById('srs-day-start-hour').value, 10),
         review_autoplay_audio: document.getElementById('review-autoplay-audio').checked,
         review_shortcut_enabled: document.getElementById('review-shortcut-enabled').checked,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
+        review_two_button_mode: document.getElementById('review-two-button-mode').checked,
     });
     applyAppSettings(settings);
     if (bridge) bridge.saveAppSettings(JSON.stringify(settings));
@@ -150,6 +185,7 @@ function resetSRSDefaults() {
         default_learning_steps: '1 10',
         default_relearning_steps: '10',
         default_study_order: 'new_first',
+        day_start_hour: 4,
     });
     applyAppSettings(settings);
     showAppSettings();
@@ -161,6 +197,7 @@ function resetReviewBehavior() {
         review_autoplay_audio: true,
         review_shortcut_enabled: true,
         review_shortcut_key: 'Space',
+        review_two_button_mode: false,
     });
     applyAppSettings(settings);
     showAppSettings();
@@ -211,6 +248,9 @@ function showView(viewId) {
     if (viewId === 'edit-card' && bridge) {
         if (cardTypes.length === 0) bridge.getCardTypes();
     }
+    if (viewId === 'create-deck') {
+        populateParentDeckSelect('deck-parent-select');
+    }
     if (viewId === 'create-card' && bridge) {
         if (cardTypes.length === 0) bridge.getCardTypes();
         else updateCardTypes(cardTypes);
@@ -224,19 +264,27 @@ function updateStats(due, newCards) {
     document.getElementById('new-cards').textContent = newCards;
 }
 
+function populateDeckSelectHierarchical(select, flat) {
+    var frag = document.createDocumentFragment();
+    flat.forEach(function(item) {
+        var opt = document.createElement('option');
+        opt.value = item.deck.id;
+        var indent = '';
+        for (var i = 0; i < item.depth; i++) indent += '\u00A0\u00A0\u00A0\u00A0';
+        opt.textContent = indent + item.deck.name;
+        frag.appendChild(opt);
+    });
+    select.appendChild(frag);
+}
+
 function populateCardDeckSelect() {
     var select = document.getElementById('card-deck-select');
     if (!select) return;
     var preselect = createCardPreselectedDeckId !== null ? String(createCardPreselectedDeckId) : select.value;
     select.innerHTML = '';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (preselect && decks.some(function(d) { return String(d.id) === preselect; })) {
         select.value = preselect;
     }
@@ -247,14 +295,9 @@ function populateRetentionDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -292,14 +335,9 @@ function populateHeatmapDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -434,6 +472,53 @@ function renderHeatmapSVG(counts) {
     }, true);
 }
 
+function buildDeckTree(deckList) {
+    var map = {};
+    var roots = [];
+    deckList.forEach(function(d) { map[d.id] = { deck: d, children: [] }; });
+    deckList.forEach(function(d) {
+        if (d.parent_id && map[d.parent_id]) {
+            map[d.parent_id].children.push(map[d.id]);
+        } else {
+            roots.push(map[d.id]);
+        }
+    });
+    // Sort children by position at each level
+    function sortByPos(nodes) {
+        nodes.sort(function(a, b) { return (a.deck.position || 0) - (b.deck.position || 0); });
+        nodes.forEach(function(n) { sortByPos(n.children); });
+    }
+    sortByPos(roots);
+    return roots;
+}
+
+function flattenDeckTree(nodes, depth, respectCollapse) {
+    var result = [];
+    nodes.forEach(function(node, idx) {
+        var isCollapsed = respectCollapse && collapsedDecks.has(node.deck.id);
+        result.push({ deck: node.deck, depth: depth, hasChildren: node.children.length > 0, collapsed: isCollapsed, siblingIndex: idx, siblingCount: nodes.length });
+        if (!isCollapsed) {
+            result = result.concat(flattenDeckTree(node.children, depth + 1, respectCollapse));
+        }
+    });
+    return result;
+}
+
+function toggleDeckCollapse(deckId) {
+    if (collapsedDecks.has(deckId)) {
+        collapsedDecks.delete(deckId);
+    } else {
+        collapsedDecks.add(deckId);
+    }
+    renderDeckList();
+}
+
+function expandAllDecks() {
+    collapsedDecks.clear();
+    deckCollapseInitialized = true;
+    renderDeckList();
+}
+
 function updateDecks(deckData) {
     decks = deckData;
     populateCardDeckSelect();
@@ -443,24 +528,174 @@ function updateDecks(deckData) {
         fetchRetentionStats();
         fetchHeatmap();
     }
+    // On first load, auto-collapse all parent decks
+    if (!deckCollapseInitialized) {
+        deckCollapseInitialized = true;
+        decks.forEach(function(d) {
+            if (decks.some(function(c) { return c.parent_id === d.id; })) {
+                collapsedDecks.add(d.id);
+            }
+        });
+    }
+    renderDeckList();
+}
+
+function isDescendantOf(childId, ancestorId) {
+    var queue = [ancestorId];
+    while (queue.length) {
+        var cur = queue.shift();
+        for (var i = 0; i < decks.length; i++) {
+            if (decks[i].parent_id === cur) {
+                if (decks[i].id === childId) return true;
+                queue.push(decks[i].id);
+            }
+        }
+    }
+    return false;
+}
+
+var deckDragId = null;
+
+function renderDeckList() {
     var container = document.getElementById('deck-list');
     container.innerHTML = '';
     if (decks.length === 0) {
         container.innerHTML = '<p class="text">No decks found. Create or import a deck to get started.</p>';
         return;
     }
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0, true);
     var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
+
+    // Helper: create a reorder drop zone between sibling decks
+    function makeSiblingDropZone(parentId, position, depth) {
+        var zone = document.createElement('div');
+        zone.className = 'deck-drop-zone';
+        // Use padding for a large invisible hit area; the visible bar is drawn via border
+        zone.style.cssText = 'padding:6px 0; margin:-6px 0; border-top:2px solid transparent; border-radius:4px; transition:border-color 0.15s ease; max-width:600px; box-sizing:content-box; position:relative; z-index:1;';
+        if (depth > 0) {
+            zone.style.marginLeft = (depth * 1.5) + 'rem';
+            zone.style.maxWidth = (600 - depth * 24) + 'px';
+        }
+        zone.addEventListener('dragover', function(e) {
+            if (!deckDragId) return;
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (!dragged) return;
+            if (parentId && isDescendantOf(parentId, deckDragId)) return;
+            if (parentId === deckDragId) return;
+            var sameParent = (dragged.parent_id || 0) === (parentId || 0);
+            if (sameParent && (dragged.position === position || dragged.position === position - 1)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            zone.style.borderColor = currentAccent;
+        });
+        zone.addEventListener('dragleave', function() {
+            zone.style.borderColor = 'transparent';
+        });
+        zone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            zone.style.borderColor = 'transparent';
+            if (!deckDragId || !bridge) return;
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (!dragged) return;
+            if (parentId && isDescendantOf(parentId, deckDragId)) return;
+            if (parentId === deckDragId) return;
+            // Adjust position if moving within the same parent and the deck was before the target
+            var adjustedPos = position;
+            var sameParent = (dragged.parent_id || 0) === (parentId || 0);
+            if (sameParent && dragged.position < position) {
+                adjustedPos = position - 1;
+            }
+            bridge.reorderDeck(deckDragId, parentId || 0, adjustedPos);
+            deckDragId = null;
+        });
+        return zone;
+    }
+
+    // Top-level drop zone — reorder to position 0 at root
+    frag.appendChild(makeSiblingDropZone(null, 0, 0));
+
+    var pendingTrailingZones = []; // stack of {parentId, position, depth}
+
+    flat.forEach(function(item, idx) {
+        var deck = item.deck;
+        var depth = item.depth;
+
+        // Flush trailing zones for deeper/equal depth levels that are now closed
+        while (pendingTrailingZones.length > 0 && pendingTrailingZones[pendingTrailingZones.length - 1].depth >= depth) {
+            var z = pendingTrailingZones.pop();
+            frag.appendChild(makeSiblingDropZone(z.parentId, z.position, z.depth));
+        }
+
+        // "Before" drop zone: first child in a subgroup, or between siblings
+        if (item.siblingIndex === 0 && depth > 0) {
+            frag.appendChild(makeSiblingDropZone(deck.parent_id, 0, depth));
+        } else if (item.siblingIndex > 0) {
+            frag.appendChild(makeSiblingDropZone(deck.parent_id, item.siblingIndex, depth));
+        }
         var card = document.createElement('div');
         card.className = 'card text-white mb-3 deck-card';
+        card.setAttribute('draggable', 'true');
+        card.dataset.deckId = deck.id;
         card.style.backgroundColor = '#2d2a3e';
-        card.style.borderTop = '3px solid ' + currentAccent;
+        card.style.borderTop = depth === 0 ? '3px solid ' + currentAccent : '1px solid #3d3a50';
         card.style.borderLeft = 'none';
         card.style.borderRight = 'none';
         card.style.borderBottom = '1px solid #3d3a50';
         card.style.cursor = 'pointer';
         card.style.maxWidth = '600px';
-        card.style.transition = 'background-color 0.15s ease';
+        card.style.transition = 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease';
+        if (depth > 0) {
+            card.style.marginLeft = (depth * 1.5) + 'rem';
+            card.style.maxWidth = (600 - depth * 24) + 'px';
+        }
+
+        // --- Drag source ---
+        card.addEventListener('dragstart', function(e) {
+            deckDragId = deck.id;
+            card.style.opacity = '0.5';
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(deck.id));
+        });
+        card.addEventListener('dragend', function() {
+            card.style.opacity = '1';
+            deckDragId = null;
+        });
+
+        // --- Drop target (reparent: drop onto center of card) ---
+        card.addEventListener('dragover', function(e) {
+            if (!deckDragId || deckDragId === deck.id) return;
+            if (isDescendantOf(deck.id, deckDragId)) return;
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (dragged && dragged.parent_id === deck.id) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            card.style.outline = '2px solid ' + currentAccent;
+            card.style.outlineOffset = '-2px';
+        });
+        card.addEventListener('dragleave', function() {
+            card.style.outline = '';
+            card.style.outlineOffset = '';
+        });
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            card.style.outline = '';
+            card.style.outlineOffset = '';
+            if (!deckDragId || deckDragId === deck.id) return;
+            if (isDescendantOf(deck.id, deckDragId)) return;
+            if (bridge) {
+                bridge.setDeckParent(deckDragId, deck.id);
+            }
+            deckDragId = null;
+        });
+
+        var chevron = '';
+        if (item.hasChildren) {
+            var rotation = item.collapsed ? '0' : '90';
+            chevron = '<span class="deck-collapse-toggle" data-deck-id="' + deck.id + '" style="cursor:pointer; margin-right:0.75rem; user-select:none; display:inline-flex; align-items:center; justify-content:center; width:2rem; height:2rem; border-radius:4px; transition:transform 0.15s ease, background-color 0.15s ease; transform:rotate(' + rotation + 'deg);">' +
+                '<svg width="16" height="16" viewBox="0 0 12 12" fill="none" style="flex-shrink:0;"><path d="M3 1.5L8.5 6L3 10.5" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+            '</span>';
+        }
         var dueBadge = deck.due > 0
             ? '<span class="badge" style="background-color:' + currentAccent + '; font-size:0.82rem; padding:0.35rem 0.65rem;">' + deck.due + ' due</span>'
             : '';
@@ -472,22 +707,45 @@ function updateDecks(deckData) {
             : '';
         card.innerHTML =
             '<div class="card-body d-flex justify-content-between align-items-center" style="padding: 0.9rem 1.25rem;">' +
-                '<div>' +
-                    '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
-                    '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
+                '<div style="display:flex; align-items:center;">' +
+                    chevron +
+                    '<div>' +
+                        '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
+                        '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
+                    '</div>' +
                 '</div>' +
                 '<div class="d-flex gap-2 align-items-center">' +
                     dueBadge + newBadge + emptyLabel +
                 '</div>' +
             '</div>';
-        card.addEventListener('mouseenter', function() { card.style.backgroundColor = '#35324a'; });
+        card.addEventListener('mouseenter', function() { if (!deckDragId) card.style.backgroundColor = '#35324a'; });
         card.addEventListener('mouseleave', function() { card.style.backgroundColor = '#2d2a3e'; });
         card.addEventListener('click', function(e) {
+            // If the chevron toggle was clicked, collapse/expand instead of navigating
+            var toggle = e.target.closest('.deck-collapse-toggle');
+            if (toggle) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDeckCollapse(deck.id);
+                return;
+            }
             e.preventDefault();
             showDeckDetails(deck);
         });
         frag.appendChild(card);
+
+        // If last sibling in group, schedule a trailing drop zone (placed after subtree)
+        if (item.siblingIndex === item.siblingCount - 1) {
+            pendingTrailingZones.push({ parentId: deck.parent_id, position: item.siblingIndex + 1, depth: depth });
+        }
     });
+
+    // Flush any remaining trailing zones
+    while (pendingTrailingZones.length > 0) {
+        var z = pendingTrailingZones.pop();
+        frag.appendChild(makeSiblingDropZone(z.parentId, z.position, z.depth));
+    }
+
     container.appendChild(frag);
 }
 
@@ -496,17 +754,53 @@ function showCreateCard(deckId) {
     showView('create-card');
 }
 
+function populateParentDeckSelect(selectId, excludeDeckId) {
+    var select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="0">None (top level)</option>';
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    // Collect IDs to exclude (the deck itself and all its descendants)
+    var excludeIds = new Set();
+    if (excludeDeckId) {
+        excludeIds.add(excludeDeckId);
+        var queue = [excludeDeckId];
+        while (queue.length) {
+            var cur = queue.shift();
+            decks.forEach(function(d) {
+                if (d.parent_id === cur) {
+                    excludeIds.add(d.id);
+                    queue.push(d.id);
+                }
+            });
+        }
+    }
+    var frag = document.createDocumentFragment();
+    flat.forEach(function(item) {
+        if (excludeIds.has(item.deck.id)) return;
+        var opt = document.createElement('option');
+        opt.value = item.deck.id;
+        var indent = '';
+        for (var i = 0; i < item.depth; i++) indent += '\u00A0\u00A0\u00A0\u00A0';
+        opt.textContent = indent + item.deck.name;
+        frag.appendChild(opt);
+    });
+    select.appendChild(frag);
+}
+
 function createDeck() {
     var name = document.getElementById('deck-name').value.trim();
     var description = document.getElementById('deck-description').value.trim();
+    var parentId = parseInt(document.getElementById('deck-parent-select').value, 10) || 0;
     if (name === '') {
         showAlert('Please enter a deck name.');
         return;
     }
     if (bridge) {
-        bridge.createDeck(name, description);
+        bridge.createDeck(name, description, parentId);
         document.getElementById('deck-name').value = '';
         document.getElementById('deck-description').value = '';
+        document.getElementById('deck-parent-select').value = '0';
         showView('srs');
     }
 }
@@ -625,6 +919,8 @@ function showDeckSettings() {
     if (!deck) return;
     document.getElementById('settings-deck-name').textContent = deck.name;
     document.getElementById('settings-deck-name-input').value = deck.name;
+    populateParentDeckSelect('settings-deck-parent-select', deck.id);
+    document.getElementById('settings-deck-parent-select').value = deck.parent_id ? String(deck.parent_id) : '0';
     document.getElementById('settings-deck-description-input').value = deck.description || '';
     document.getElementById('settings-new-cards-limit').value = deck.new_cards_limit !== undefined ? deck.new_cards_limit : 15;
     document.getElementById('settings-learning-steps').value = deck.learning_steps !== undefined ? deck.learning_steps : '1 10';
@@ -638,6 +934,7 @@ function saveDeckSettings() {
     if (!currentDeckForDetails || !bridge) return;
     var name = document.getElementById('settings-deck-name-input').value.trim();
     if (name === '') { showAlert('Deck name cannot be empty.'); return; }
+    var parentId = parseInt(document.getElementById('settings-deck-parent-select').value, 10) || 0;
     var description = document.getElementById('settings-deck-description-input').value.trim();
     var limit = parseInt(document.getElementById('settings-new-cards-limit').value, 10);
     if (isNaN(limit) || limit < 0) { showAlert('Please enter a valid number.'); return; }
@@ -645,7 +942,7 @@ function saveDeckSettings() {
     var relearningSteps = document.getElementById('settings-relearning-steps').value.trim();
     var studyOrder = document.getElementById('settings-study-order').value || 'new_first';
     var answerDisplay = document.getElementById('settings-answer-display').value || 'replace';
-    bridge.saveDeckSettings(currentDeckForDetails.id, name, description, limit, learningSteps, relearningSteps, studyOrder, answerDisplay);
+    bridge.saveDeckSettings(currentDeckForDetails.id, name, description, limit, learningSteps, relearningSteps, studyOrder, answerDisplay, parentId);
     currentDeckForDetails.name = name;
     currentDeckForDetails.description = description;
     currentDeckForDetails.new_cards_limit = limit;
@@ -653,21 +950,54 @@ function saveDeckSettings() {
     currentDeckForDetails.relearning_steps = relearningSteps;
     currentDeckForDetails.study_order = studyOrder;
     currentDeckForDetails.answer_display = answerDisplay;
+    currentDeckForDetails.parent_id = parentId || null;
     showDeckDetails(currentDeckForDetails);
 }
 
-var reviewQueue = [];
+var newQueue = [];
+var dueQueue = [];
 var learningQueue = []; // [{card, showAfter (ms timestamp)}] — time-gated cards waiting to return
-var currentCardIndex = 0;
+var newCardIndex = 0;
+var dueCardIndex = 0;
 var currentCard = null;
-var currentCardFromLearning = false;
+var currentCardSource = null; // 'new', 'due', or 'learning'
 var currentDeckIdForReview = null;
 var currentDeckLearningSteps = [];
 var currentDeckRelearnSteps = [];
 var currentDeckAnswerDisplay = 'replace';
+var studyOrder = 'mix';
+var interspersionRatio = 1;
 var mediaBaseUrl = '';
 
+function updateReviewCounts() {
+    var newCount = newQueue.length - newCardIndex;
+    var reviewCount = dueQueue.length - dueCardIndex;
+    var learningCount = learningQueue.length;
+    // The current learning card was removed from the array to be shown,
+    // so add it back to the displayed count to stay consistent with
+    // new/due counts (which include the current card).
+    if (currentCardSource === 'learning') {
+        learningCount++;
+    }
+    document.getElementById('review-count-new').textContent = newCount;
+    document.getElementById('review-count-learning').textContent = learningCount;
+    document.getElementById('review-count-review').textContent = reviewCount;
+
+    var newEl = document.getElementById('review-count-new');
+    var learnEl = document.getElementById('review-count-learning');
+    var reviewEl = document.getElementById('review-count-review');
+    newEl.style.textDecoration = currentCardSource === 'new' ? 'underline' : 'none';
+    learnEl.style.textDecoration = currentCardSource === 'learning' ? 'underline' : 'none';
+    reviewEl.style.textDecoration = currentCardSource === 'due' ? 'underline' : 'none';
+}
+
 function startReview(deckId) {
+    // Resume the existing session if one is active for this deck
+    if (currentDeckIdForReview === deckId &&
+        (newCardIndex < newQueue.length || dueCardIndex < dueQueue.length || learningQueue.length > 0)) {
+        showView('review');
+        return;
+    }
     currentDeckIdForReview = deckId;
     if (bridge) {
         bridge.startReview(deckId);
@@ -679,15 +1009,21 @@ function updateReviewQueue(data) {
     currentDeckRelearnSteps = data.relearning_steps || [];
     currentDeckAnswerDisplay = data.answer_display || 'replace';
     mediaBaseUrl = data.media_base_url || '';
-    reviewQueue = data.cards || [];
+    studyOrder = data.study_order || 'mix';
+    newQueue = data.new_cards || [];
+    dueQueue = data.due_cards || [];
     learningQueue = [];
-    currentCardIndex = 0;
-    currentCardFromLearning = false;
+    newCardIndex = 0;
+    dueCardIndex = 0;
+    currentCardSource = null;
+    // Anki-style intersperser ratio for 'mix' mode
+    interspersionRatio = (dueQueue.length + 1) / (newQueue.length + 1);
     document.getElementById('review-card-section').style.display = 'block';
     document.getElementById('review-action-bar').style.display = 'flex';
     document.getElementById('review-complete-section').style.display = 'none';
     showView('review');
-    if (reviewQueue.length === 0) {
+    updateReviewCounts();
+    if (newQueue.length === 0 && dueQueue.length === 0) {
         showReviewComplete();
         return;
     }
@@ -707,10 +1043,15 @@ function renderTemplate(template, fields, frontHtml) {
     var result = template;
     // {{FrontSide}} — Anki special token: re-render the already-rendered front HTML
     result = result.replace(/\{\{FrontSide\}\}/gi, frontHtml || '');
-    // Conditional blocks: {{#Field}}...{{/Field}}
+    // Positive conditional blocks: {{#Field}}...{{/Field}} — show content when field is non-empty
     result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
         key = key.trim();
         return (fields[key] && fields[key].trim()) ? content : '';
+    });
+    // Negation conditional blocks: {{^Field}}...{{/Field}} — show content when field is empty
+    result = result.replace(/\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
+        key = key.trim();
+        return (!fields[key] || !fields[key].trim()) ? content : '';
     });
     // Simple placeholders: {{Field}} or {{filter:Field}}
     result = result.replace(/\{\{([^}]+)\}\}/g, function(match, key) {
@@ -784,33 +1125,53 @@ function attachMedia(btn) {
 
 function showNextCard() {
     var now = Date.now();
-    var hasRegular = currentCardIndex < reviewQueue.length;
+    var hasNew = newCardIndex < newQueue.length;
+    var hasDue = dueCardIndex < dueQueue.length;
+    var hasRegular = hasNew || hasDue;
 
     if (!hasRegular && learningQueue.length === 0) {
         showReviewComplete();
         return;
     }
 
-    // Find learning cards whose timer has elapsed
+    // Priority 1: Learning cards whose timer has elapsed (Anki always shows these first)
     var overdue = learningQueue.filter(function(item) { return item.showAfter <= now; });
     overdue.sort(function(a, b) { return a.showAfter - b.showAfter; });
 
     if (!hasRegular) {
-        // All regular cards done — show the earliest pending learning card (timer may not be up yet)
+        // All regular cards done — show the earliest pending learning card
         learningQueue.sort(function(a, b) { return a.showAfter - b.showAfter; });
         var item = learningQueue.shift();
         currentCard = item.card;
-        currentCardFromLearning = true;
+        currentCardSource = 'learning';
     } else if (overdue.length > 0) {
-        // A learning card's timer has elapsed — interleave it now (mirrors Anki behaviour)
+        // A learning card's timer has elapsed — show it immediately (highest priority)
         var item = overdue[0];
         learningQueue = learningQueue.filter(function(i) { return i !== item; });
         currentCard = item.card;
-        currentCardFromLearning = true;
+        currentCardSource = 'learning';
     } else {
-        // Timer hasn't fired for any learning card — show next regular card
-        currentCard = reviewQueue[currentCardIndex];
-        currentCardFromLearning = false;
+        // Priority 2: Dynamically pick from new or due queue based on study_order
+        var pickNew = false;
+        if (hasNew && !hasDue) {
+            pickNew = true;
+        } else if (!hasNew && hasDue) {
+            pickNew = false;
+        } else if (studyOrder === 'new_first') {
+            pickNew = true;
+        } else if (studyOrder === 'new_last') {
+            pickNew = false;
+        } else {
+            // 'mix' — Anki-style intersperser: evenly distribute new cards among due cards
+            pickNew = (newCardIndex + 1) * interspersionRatio <= (dueCardIndex + 1);
+        }
+        if (pickNew) {
+            currentCard = newQueue[newCardIndex];
+            currentCardSource = 'new';
+        } else {
+            currentCard = dueQueue[dueCardIndex];
+            currentCardSource = 'due';
+        }
     }
 
     document.getElementById('review-card-css').textContent = currentCard.css_style || '';
@@ -829,6 +1190,7 @@ function showNextCard() {
     document.getElementById('review-back-container').style.display = 'none';
     document.getElementById('review-rating-buttons').style.display = 'none';
     document.getElementById('review-show-answer-btn').style.display = 'block';
+    updateReviewCounts();
 }
 
 function revealAnswer() {
@@ -928,9 +1290,11 @@ function rateCard(rating) {
         bridge.submitRating(currentCard.id, rating);
     }
 
-    // Advance the regular-queue pointer only when the card being rated came from there
-    if (!currentCardFromLearning) {
-        currentCardIndex++;
+    // Advance the appropriate queue pointer
+    if (currentCardSource === 'new') {
+        newCardIndex++;
+    } else if (currentCardSource === 'due') {
+        dueCardIndex++;
     }
 
     showNextCard();
@@ -1195,14 +1559,9 @@ function populateBrowseDeckSelect() {
     if (!select) return;
     var prev = select.value;
     select.innerHTML = '<option value="0">All Decks</option>';
-    var frag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        frag.appendChild(opt);
-    });
-    select.appendChild(frag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(select, flat);
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
@@ -1349,14 +1708,9 @@ function loadCardForEdit(data) {
     // Populate deck select
     var deckSelect = document.getElementById('edit-card-deck-select');
     deckSelect.innerHTML = '';
-    var deckFrag = document.createDocumentFragment();
-    decks.forEach(function(deck) {
-        var opt = document.createElement('option');
-        opt.value = deck.id;
-        opt.textContent = deck.name;
-        deckFrag.appendChild(opt);
-    });
-    deckSelect.appendChild(deckFrag);
+    var tree = buildDeckTree(decks);
+    var flat = flattenDeckTree(tree, 0);
+    populateDeckSelectHierarchical(deckSelect, flat);
     if (card.deck_id) deckSelect.value = card.deck_id;
 
     // Populate card type select

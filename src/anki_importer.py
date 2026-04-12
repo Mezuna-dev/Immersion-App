@@ -401,7 +401,7 @@ def get_css_from_config(config_bytes):
 def get_note_types_old(cur):
     """
     Parse note types from col.models JSON (old Anki format).
-    Returns {anki_model_id: {name, fields, qfmt, afmt, css}}.
+    Returns {anki_model_id: {name, fields, templates: [{qfmt, afmt}], css}}.
     """
     try:
         cur.execute("SELECT models FROM col")
@@ -421,12 +421,19 @@ def get_note_types_old(cur):
         field_defs = sorted(model.get('flds', []), key=lambda x: x.get('ord', 0))
         fields = [f['name'] for f in field_defs]
         tmpls = model.get('tmpls', [])
-        first_tmpl = tmpls[0] if tmpls else {}
+        templates = []
+        for tmpl in sorted(tmpls, key=lambda t: t.get('ord', 0)):
+            templates.append({
+                'name': tmpl.get('name', ''),
+                'qfmt': tmpl.get('qfmt', ''),
+                'afmt': tmpl.get('afmt', ''),
+            })
+        if not templates:
+            templates = [{'name': '', 'qfmt': '', 'afmt': ''}]
         result[mid] = {
             'name': model.get('name', f'NoteType_{mid}'),
             'fields': fields if fields else ['Front', 'Back'],
-            'qfmt': first_tmpl.get('qfmt', ''),
-            'afmt': first_tmpl.get('afmt', ''),
+            'templates': templates,
             'css': model.get('css', ''),
         }
     return result
@@ -435,7 +442,7 @@ def get_note_types_old(cur):
 def get_note_types_new(cur):
     """
     Parse note types from notetypes/fields/templates tables (new Anki format).
-    Returns {anki_model_id: {name, fields, qfmt, afmt, css}}.
+    Returns {anki_model_id: {name, fields, templates: [{qfmt, afmt}], css}}.
     """
     result = {}
     try:
@@ -455,21 +462,22 @@ def get_note_types_new(cur):
         # CSS from notetype config
         css = get_css_from_config(nt_config)
 
-        # Templates
-        qfmt, afmt = '', ''
+        # All templates, ordered by ord
+        templates = []
         try:
-            cur.execute("SELECT config FROM templates WHERE ntid = ? ORDER BY ord LIMIT 1", (nt_id,))
-            tmpl_row = cur.fetchone()
-            if tmpl_row:
+            cur.execute("SELECT config FROM templates WHERE ntid = ? ORDER BY ord", (nt_id,))
+            for tmpl_row in cur.fetchall():
                 qfmt, afmt = get_template_formats(tmpl_row[0])
+                templates.append({'name': '', 'qfmt': qfmt, 'afmt': afmt})
         except Exception:
             pass
+        if not templates:
+            templates = [{'name': '', 'qfmt': '', 'afmt': ''}]
 
         result[nt_id] = {
             'name': nt_name or f'NoteType_{nt_id}',
             'fields': fields if fields else ['Front', 'Back'],
-            'qfmt': qfmt,
-            'afmt': afmt,
+            'templates': templates,
             'css': css,
         }
 
@@ -571,19 +579,24 @@ def import_anki_deck(apkg_path):
     # --- Read collection creation date (base for all due-day offsets) ---
     crt_date = _get_col_crt_date(cur)
 
-    # --- Create card types in our DB (one per Anki note type) ---
-    note_type_mapping = {}  # anki_mid -> our card_type_id
+    # --- Create card types in our DB (one per Anki note type per template) ---
+    # note_type_mapping: (anki_mid, ord) -> our card_type_id
+    note_type_mapping = {}
     for anki_mid, nt in note_types.items():
-        ct_id = database.get_or_create_card_type(
-            name=nt['name'],
-            fields=nt['fields'],
-            front_style=nt['qfmt'],
-            back_style=nt['afmt'],
-            css_style=nt['css'],
-        )
-        note_type_mapping[anki_mid] = ct_id
+        for tmpl_ord, tmpl in enumerate(nt['templates']):
+            suffix = f' ({tmpl["name"]})' if tmpl.get('name') and len(nt['templates']) > 1 else ''
+            if tmpl_ord > 0 and not suffix:
+                suffix = f' (Card {tmpl_ord + 1})'
+            ct_id = database.get_or_create_card_type(
+                name=nt['name'] + suffix,
+                fields=nt['fields'],
+                front_style=tmpl['qfmt'],
+                back_style=tmpl['afmt'],
+                css_style=nt['css'],
+            )
+            note_type_mapping[(anki_mid, tmpl_ord)] = ct_id
 
-    # --- Import decks ---
+    # --- Import decks (with subdeck hierarchy support) ---
     deck_id_mapping = {}  # anki_deck_id -> our deck_id
 
     s = database.get_app_settings()
@@ -594,13 +607,14 @@ def import_anki_deck(apkg_path):
         study_order=s.get('default_study_order', 'new_first'),
     )
 
+    # Collect all raw deck entries: list of (anki_deck_id, full_name)
+    raw_decks = []
     cur.execute("PRAGMA table_info(decks)")
     has_decks_table = len(cur.fetchall()) > 0
 
     if has_decks_table:
         cur.execute("SELECT id, name FROM decks WHERE id != 1")
-        for deck_id, deck_name in cur.fetchall():
-            deck_id_mapping[deck_id] = database.create_deck(deck_name, **deck_kwargs)
+        raw_decks = cur.fetchall()
     else:
         try:
             cur.execute("SELECT decks FROM col")
@@ -609,9 +623,40 @@ def import_anki_deck(apkg_path):
                 for deck_data in json.loads(row[0]).values():
                     anki_did = deck_data.get("id")
                     if anki_did and anki_did != 1:
-                        deck_id_mapping[anki_did] = database.create_deck(deck_data["name"], **deck_kwargs)
+                        raw_decks.append((anki_did, deck_data["name"]))
         except Exception:
             pass
+
+    # Sort by name so parent decks are created before children
+    raw_decks.sort(key=lambda x: x[1])
+
+    # Track parent decks created by path prefix -> our_deck_id
+    parent_path_map = {}  # "Parent::Child" -> our_deck_id
+
+    for anki_did, full_name in raw_decks:
+        parts = [p.strip() for p in full_name.split('::')]
+        parent_id = None
+
+        # Ensure all ancestor decks exist
+        for i in range(len(parts) - 1):
+            ancestor_path = '::'.join(parts[:i + 1])
+            if ancestor_path not in parent_path_map:
+                ancestor_parent_id = parent_path_map.get('::'.join(parts[:i])) if i > 0 else None
+                parent_path_map[ancestor_path] = database.create_deck(
+                    parts[i], parent_id=ancestor_parent_id, **deck_kwargs
+                )
+            parent_id = parent_path_map[ancestor_path]
+
+        # Create the leaf deck
+        leaf_name = parts[-1]
+        full_path = '::'.join(parts)
+        if full_path in parent_path_map:
+            # This deck was already created as a parent for a deeper subdeck
+            deck_id_mapping[anki_did] = parent_path_map[full_path]
+        else:
+            our_id = database.create_deck(leaf_name, parent_id=parent_id, **deck_kwargs)
+            deck_id_mapping[anki_did] = our_id
+            parent_path_map[full_path] = our_id
 
     # --- Import notes as cards ---
     cur.execute("SELECT id, flds, mid FROM notes")
@@ -637,38 +682,42 @@ def import_anki_deck(apkg_path):
         front = converted_values[0] if converted_values else ''
         back = ' / '.join(converted_values[1:]) if len(converted_values) > 1 else ''
 
-        # Fetch the first card for this note (ord=0) to get deck + scheduling
+        # Import ALL cards for this note (each card template / ord can be
+        # in a different deck, which is common with subdecks).
         cur.execute(
-            "SELECT id, did, type, queue, due, ivl, factor, reps FROM cards WHERE nid = ? ORDER BY ord LIMIT 1",
+            "SELECT id, did, ord, type, queue, due, ivl, factor, reps FROM cards WHERE nid = ? ORDER BY ord",
             (note_id,)
         )
-        card_row = cur.fetchone()
-        if not card_row:
+        card_rows = cur.fetchall()
+        if not card_rows:
             continue
 
-        anki_cid, anki_did, a_type, a_queue, a_due, a_ivl, a_factor, a_reps = card_row
+        for card_row in card_rows:
+            anki_cid, anki_did, card_ord, a_type, a_queue, a_due, a_ivl, a_factor, a_reps = card_row
 
-        our_deck_id = deck_id_mapping.get(anki_did)
-        if not our_deck_id:
-            continue
+            our_deck_id = deck_id_mapping.get(anki_did)
+            if not our_deck_id:
+                continue
 
-        our_card_type_id = note_type_mapping.get(mid)
-        sched = _anki_scheduling(a_type, a_queue, a_due, a_ivl, a_factor, a_reps, crt_date)
+            # Use the card type for this specific template ord, falling back to ord 0
+            our_card_type_id = note_type_mapping.get((mid, card_ord)) or note_type_mapping.get((mid, 0))
 
-        our_card_id = database.create_card(
-            our_deck_id,
-            front,
-            back,
-            card_type_id=our_card_type_id,
-            fields_json=json.dumps(fields_json),
-            reps=sched['reps'],
-            ease_factor=sched['ease_factor'],
-            interval=sched['interval'],
-            due_date=sched['due_date'],
-            is_new=sched['is_new'],
-            last_reviewed=sched['last_reviewed'],
-        )
-        anki_cid_map[anki_cid] = our_card_id
+            sched = _anki_scheduling(a_type, a_queue, a_due, a_ivl, a_factor, a_reps, crt_date)
+
+            our_card_id = database.create_card(
+                our_deck_id,
+                front,
+                back,
+                card_type_id=our_card_type_id,
+                fields_json=json.dumps(fields_json),
+                reps=sched['reps'],
+                ease_factor=sched['ease_factor'],
+                interval=sched['interval'],
+                due_date=sched['due_date'],
+                is_new=sched['is_new'],
+                last_reviewed=sched['last_reviewed'],
+            )
+            anki_cid_map[anki_cid] = our_card_id
 
     # --- Import review history from revlog ---
     try:

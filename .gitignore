@@ -53,3 +53,5 @@ imported/*
 Thumbs.db
 .DS_Store
 data/media_import_debug.txt
+/.claude
+data/settings.json

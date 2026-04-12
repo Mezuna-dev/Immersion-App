@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for Immersion Suite v1.1.0
+# PyInstaller spec for Immersion Suite v1.2.0
 
 block_cipher = None
 

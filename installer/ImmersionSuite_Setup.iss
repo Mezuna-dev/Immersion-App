@@ -8,7 +8,7 @@
 ;      OR run: iscc installer\ImmersionSuite_Setup.iss
 
 #define AppName      "Immersion Suite"
-#define AppVersion   "1.1.0"
+#define AppVersion   "1.2.0"
 #define AppPublisher "Mezuna"
 #define AppURL       "https://github.com/mezuna-dev/immersion-app"
 #define AppExeName   "ImmersionSuite.exe"

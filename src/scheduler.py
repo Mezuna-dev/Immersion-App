@@ -1,9 +1,9 @@
 from datetime import date, timedelta
 import math
 
-def calculate_next_review(reps, ease_factor, interval, rating):
-    
-    todays_date = date.today()
+def calculate_next_review(reps, ease_factor, interval, rating, reference_date=None):
+
+    todays_date = reference_date if reference_date is not None else date.today()
 
     if rating < 3:
         new_reps = 0
