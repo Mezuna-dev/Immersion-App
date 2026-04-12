@@ -100,6 +100,7 @@ class AppBridge(QObject):
                 'study_order': deck.study_order or 'new_first',
                 'answer_display': deck.answer_display or 'replace',
                 'parent_id': deck.parent_id,
+                'position': deck.position,
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
@@ -267,13 +268,23 @@ class AppBridge(QObject):
 
     @pyqtSlot(int, int)
     def setDeckParent(self, deck_id, parent_id):
-        """Move a deck under a new parent (parent_id=0 means top level)."""
+        """Move a deck under a new parent (parent_id=0 means top level), placed at end."""
+        new_parent = parent_id if parent_id else None
         con = database.create_db_connection()
         cur = con.cursor()
-        cur.execute("UPDATE Deck SET Parent_ID = ? WHERE ID = ?",
-                    (parent_id if parent_id else None, deck_id))
-        con.commit()
+        if new_parent is not None:
+            cur.execute("SELECT COALESCE(MAX(Position), -1) + 1 FROM Deck WHERE Parent_ID = ?", (new_parent,))
+        else:
+            cur.execute("SELECT COALESCE(MAX(Position), -1) + 1 FROM Deck WHERE Parent_ID IS NULL")
+        end_pos = cur.fetchone()[0]
         con.close()
+        database.reorder_deck(deck_id, new_parent, end_pos)
+        self.getDecks()
+
+    @pyqtSlot(int, int, int)
+    def reorderDeck(self, deck_id, parent_id, position):
+        """Move a deck to a specific position among siblings (parent_id=0 means top level)."""
+        database.reorder_deck(deck_id, parent_id if parent_id else None, position)
         self.getDecks()
 
     @pyqtSlot(int)

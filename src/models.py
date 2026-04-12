@@ -1,6 +1,6 @@
 
 class Deck:
-    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10', relearning_steps='10', study_order='new_first', answer_display='replace', parent_id=None) -> None:
+    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10', relearning_steps='10', study_order='new_first', answer_display='replace', parent_id=None, position=0) -> None:
         self.id = id
         self.name = name
         self.date_created = date_created
@@ -11,6 +11,7 @@ class Deck:
         self.study_order = study_order or 'new_first'
         self.answer_display = answer_display or 'replace'
         self.parent_id = parent_id
+        self.position = position
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\nLearning Steps: {self.learning_steps}\nRelearning Steps: {self.relearning_steps}\nStudy Order: {self.study_order}\nAnswer Display: {self.answer_display}\nParent ID: {self.parent_id}\n"
     

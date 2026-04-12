@@ -483,14 +483,20 @@ function buildDeckTree(deckList) {
             roots.push(map[d.id]);
         }
     });
+    // Sort children by position at each level
+    function sortByPos(nodes) {
+        nodes.sort(function(a, b) { return (a.deck.position || 0) - (b.deck.position || 0); });
+        nodes.forEach(function(n) { sortByPos(n.children); });
+    }
+    sortByPos(roots);
     return roots;
 }
 
 function flattenDeckTree(nodes, depth, respectCollapse) {
     var result = [];
-    nodes.forEach(function(node) {
+    nodes.forEach(function(node, idx) {
         var isCollapsed = respectCollapse && collapsedDecks.has(node.deck.id);
-        result.push({ deck: node.deck, depth: depth, hasChildren: node.children.length > 0, collapsed: isCollapsed });
+        result.push({ deck: node.deck, depth: depth, hasChildren: node.children.length > 0, collapsed: isCollapsed, siblingIndex: idx, siblingCount: nodes.length });
         if (!isCollapsed) {
             result = result.concat(flattenDeckTree(node.children, depth + 1, respectCollapse));
         }
@@ -561,37 +567,72 @@ function renderDeckList() {
     var flat = flattenDeckTree(tree, 0, true);
     var frag = document.createDocumentFragment();
 
-    // Top-level drop zone — drop here to make a deck a root deck
-    var topDrop = document.createElement('div');
-    topDrop.className = 'deck-drop-zone';
-    topDrop.style.cssText = 'height:6px; max-width:600px; border-radius:4px; transition:background-color 0.15s ease, height 0.15s ease; margin-bottom:0.25rem;';
-    topDrop.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        topDrop.style.backgroundColor = currentAccent;
-        topDrop.style.height = '10px';
-    });
-    topDrop.addEventListener('dragleave', function() {
-        topDrop.style.backgroundColor = '';
-        topDrop.style.height = '6px';
-    });
-    topDrop.addEventListener('drop', function(e) {
-        e.preventDefault();
-        topDrop.style.backgroundColor = '';
-        topDrop.style.height = '6px';
-        if (deckDragId && bridge) {
-            var dragged = decks.find(function(d) { return d.id === deckDragId; });
-            if (dragged && dragged.parent_id) {
-                bridge.setDeckParent(deckDragId, 0);
-            }
+    // Helper: create a reorder drop zone between sibling decks
+    function makeSiblingDropZone(parentId, position, depth) {
+        var zone = document.createElement('div');
+        zone.className = 'deck-drop-zone';
+        // Use padding for a large invisible hit area; the visible bar is drawn via border
+        zone.style.cssText = 'padding:6px 0; margin:-6px 0; border-top:2px solid transparent; border-radius:4px; transition:border-color 0.15s ease; max-width:600px; box-sizing:content-box; position:relative; z-index:1;';
+        if (depth > 0) {
+            zone.style.marginLeft = (depth * 1.5) + 'rem';
+            zone.style.maxWidth = (600 - depth * 24) + 'px';
         }
-        deckDragId = null;
-    });
-    frag.appendChild(topDrop);
+        zone.addEventListener('dragover', function(e) {
+            if (!deckDragId) return;
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (!dragged) return;
+            if (parentId && isDescendantOf(parentId, deckDragId)) return;
+            if (parentId === deckDragId) return;
+            var sameParent = (dragged.parent_id || 0) === (parentId || 0);
+            if (sameParent && (dragged.position === position || dragged.position === position - 1)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            zone.style.borderColor = currentAccent;
+        });
+        zone.addEventListener('dragleave', function() {
+            zone.style.borderColor = 'transparent';
+        });
+        zone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            zone.style.borderColor = 'transparent';
+            if (!deckDragId || !bridge) return;
+            var dragged = decks.find(function(d) { return d.id === deckDragId; });
+            if (!dragged) return;
+            if (parentId && isDescendantOf(parentId, deckDragId)) return;
+            if (parentId === deckDragId) return;
+            // Adjust position if moving within the same parent and the deck was before the target
+            var adjustedPos = position;
+            var sameParent = (dragged.parent_id || 0) === (parentId || 0);
+            if (sameParent && dragged.position < position) {
+                adjustedPos = position - 1;
+            }
+            bridge.reorderDeck(deckDragId, parentId || 0, adjustedPos);
+            deckDragId = null;
+        });
+        return zone;
+    }
 
-    flat.forEach(function(item) {
+    // Top-level drop zone — reorder to position 0 at root
+    frag.appendChild(makeSiblingDropZone(null, 0, 0));
+
+    var pendingTrailingZones = []; // stack of {parentId, position, depth}
+
+    flat.forEach(function(item, idx) {
         var deck = item.deck;
         var depth = item.depth;
+
+        // Flush trailing zones for deeper/equal depth levels that are now closed
+        while (pendingTrailingZones.length > 0 && pendingTrailingZones[pendingTrailingZones.length - 1].depth >= depth) {
+            var z = pendingTrailingZones.pop();
+            frag.appendChild(makeSiblingDropZone(z.parentId, z.position, z.depth));
+        }
+
+        // "Before" drop zone: first child in a subgroup, or between siblings
+        if (item.siblingIndex === 0 && depth > 0) {
+            frag.appendChild(makeSiblingDropZone(deck.parent_id, 0, depth));
+        } else if (item.siblingIndex > 0) {
+            frag.appendChild(makeSiblingDropZone(deck.parent_id, item.siblingIndex, depth));
+        }
         var card = document.createElement('div');
         card.className = 'card text-white mb-3 deck-card';
         card.setAttribute('draggable', 'true');
@@ -621,12 +662,10 @@ function renderDeckList() {
             deckDragId = null;
         });
 
-        // --- Drop target ---
+        // --- Drop target (reparent: drop onto center of card) ---
         card.addEventListener('dragover', function(e) {
             if (!deckDragId || deckDragId === deck.id) return;
-            // Prevent dropping onto own descendant
             if (isDescendantOf(deck.id, deckDragId)) return;
-            // Prevent dropping onto current parent (no-op)
             var dragged = decks.find(function(d) { return d.id === deckDragId; });
             if (dragged && dragged.parent_id === deck.id) return;
             e.preventDefault();
@@ -694,7 +733,19 @@ function renderDeckList() {
             showDeckDetails(deck);
         });
         frag.appendChild(card);
+
+        // If last sibling in group, schedule a trailing drop zone (placed after subtree)
+        if (item.siblingIndex === item.siblingCount - 1) {
+            pendingTrailingZones.push({ parentId: deck.parent_id, position: item.siblingIndex + 1, depth: depth });
+        }
     });
+
+    // Flush any remaining trailing zones
+    while (pendingTrailingZones.length > 0) {
+        var z = pendingTrailingZones.pop();
+        frag.appendChild(makeSiblingDropZone(z.parentId, z.position, z.depth));
+    }
+
     container.appendChild(frag);
 }
 

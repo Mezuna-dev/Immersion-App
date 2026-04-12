@@ -110,6 +110,7 @@ def initialize_database():
                 Study_Order TEXT DEFAULT 'new_first',
                 Answer_Display TEXT DEFAULT 'replace',
                 Parent_ID INTEGER,
+                Position INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (Parent_ID) REFERENCES Deck(ID)
                 )
         """)
@@ -178,12 +179,27 @@ def migrate_database():
         "ALTER TABLE Deck ADD COLUMN Study_Order TEXT DEFAULT 'new_first'",
         "ALTER TABLE Deck ADD COLUMN Answer_Display TEXT DEFAULT 'replace'",
         "ALTER TABLE Deck ADD COLUMN Parent_ID INTEGER REFERENCES Deck(ID)",
+        "ALTER TABLE Deck ADD COLUMN Position INTEGER NOT NULL DEFAULT 0",
     ]:
         try:
             cur.execute(stmt)
             con.commit()
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+    # Back-fill positions for existing decks that still have the default 0.
+    # Group siblings by Parent_ID and assign positions alphabetically.
+    cur.execute("SELECT COUNT(*) FROM Deck WHERE Position != 0")
+    if cur.fetchone()[0] == 0:
+        cur.execute("SELECT ID, Name, Parent_ID FROM Deck ORDER BY Name COLLATE NOCASE")
+        groups = {}
+        for row in cur.fetchall():
+            groups.setdefault(row[2], []).append(row[0])
+        for pid, ids in groups.items():
+            for pos, did in enumerate(ids):
+                cur.execute("UPDATE Deck SET Position = ? WHERE ID = ?", (pos, did))
+        con.commit()
+
     con.close()
 
 
@@ -221,17 +237,17 @@ def get_ordered_subdeck_tree(deck_id):
     cur = con.cursor()
 
     # Fetch all decks into a lookup
-    cur.execute("SELECT ID, Name, Parent_ID FROM Deck")
+    cur.execute("SELECT ID, Position, Parent_ID FROM Deck")
     all_rows = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
     con.close()
 
     # Build children map
     children_map = {}
-    for did, (name, pid) in all_rows.items():
-        children_map.setdefault(pid, []).append((did, name))
-    # Sort children by name at each level
+    for did, (pos, pid) in all_rows.items():
+        children_map.setdefault(pid, []).append((did, pos))
+    # Sort children by position at each level
     for pid in children_map:
-        children_map[pid].sort(key=lambda x: x[1].lower())
+        children_map[pid].sort(key=lambda x: x[1])
 
     # DFS from deck_id
     result = []
@@ -252,12 +268,19 @@ def create_deck(name: str, description: str = "", new_cards_limit: int = 15,
     con = create_db_connection()
     cur = con.cursor()
 
+    # Place new deck at end of its sibling group
+    if parent_id is not None:
+        cur.execute("SELECT COALESCE(MAX(Position), -1) + 1 FROM Deck WHERE Parent_ID = ?", (parent_id,))
+    else:
+        cur.execute("SELECT COALESCE(MAX(Position), -1) + 1 FROM Deck WHERE Parent_ID IS NULL")
+    next_pos = cur.fetchone()[0]
+
     cur.execute("""
         INSERT INTO Deck (Name, Date_Created, Description, New_Cards_Limit,
-                          Learning_Steps, Relearning_Steps, Study_Order, Parent_ID)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                          Learning_Steps, Relearning_Steps, Study_Order, Parent_ID, Position)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (name, creation_date, description, new_cards_limit,
-          learning_steps, relearning_steps, study_order, parent_id))
+          learning_steps, relearning_steps, study_order, parent_id, next_pos))
 
     con.commit()
     new_deck_id = cur.lastrowid
@@ -272,11 +295,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Position FROM Deck""")
     rows = cur.fetchall()
 
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace', parent_id=row[9])
+        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace', parent_id=row[9], position=row[10] or 0)
         decks.append(deck)
 
     con.close()
@@ -287,7 +310,7 @@ def get_deck_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID FROM Deck
+        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Position FROM Deck
         WHERE ID=?
     """, (id,))
 
@@ -297,7 +320,7 @@ def get_deck_by_id(id):
         con.close()
         return None
     else:
-        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace', parent_id=row[8])
+        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace', parent_id=row[8], position=row[9] or 0)
 
         con.close()
         return deck
@@ -310,6 +333,42 @@ def update_deck_settings(deck_id: int, name: str, description: str, new_cards_li
     """, (name, description, new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, parent_id, deck_id))
     con.commit()
     con.close()
+
+def reorder_deck(deck_id: int, new_parent_id, new_position: int):
+    """Move a deck to a new parent and/or position among its siblings.
+
+    new_parent_id: int or None (None = top level).
+    new_position: the 0-based index the deck should occupy among its new siblings.
+    """
+    con = create_db_connection()
+    cur = con.cursor()
+
+    # Remove from old sibling group: close the gap
+    cur.execute("SELECT Parent_ID, Position FROM Deck WHERE ID = ?", (deck_id,))
+    row = cur.fetchone()
+    if row is None:
+        con.close()
+        return
+    old_parent, old_pos = row
+
+    # Close gap in old sibling group (exclude the deck being moved)
+    if old_parent is not None:
+        cur.execute("UPDATE Deck SET Position = Position - 1 WHERE Parent_ID = ? AND Position > ? AND ID != ?", (old_parent, old_pos, deck_id))
+    else:
+        cur.execute("UPDATE Deck SET Position = Position - 1 WHERE Parent_ID IS NULL AND Position > ? AND ID != ?", (old_pos, deck_id))
+
+    # Open gap in new sibling group (exclude the deck being moved)
+    if new_parent_id is not None:
+        cur.execute("UPDATE Deck SET Position = Position + 1 WHERE Parent_ID = ? AND Position >= ? AND ID != ?", (new_parent_id, new_position, deck_id))
+    else:
+        cur.execute("UPDATE Deck SET Position = Position + 1 WHERE Parent_ID IS NULL AND Position >= ? AND ID != ?", (new_position, deck_id))
+
+    # Place deck in new position
+    cur.execute("UPDATE Deck SET Parent_ID = ?, Position = ? WHERE ID = ?", (new_parent_id, new_position, deck_id))
+
+    con.commit()
+    con.close()
+
 
 def delete_deck(deck_id):
     all_ids = get_deck_and_descendant_ids(deck_id)
