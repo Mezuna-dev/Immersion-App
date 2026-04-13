@@ -2385,6 +2385,7 @@ function updateImmersionStats(stats) {
 
 function renderImmersionPieChart(labels, values, colors) {
     var chartEl = document.getElementById('immersion-pie-chart');
+    if (typeof Plotly !== 'undefined' && chartEl.data) Plotly.purge(chartEl);
     if (!labels.length) {
         chartEl.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888; font-size: 0.9rem;">No data</div>';
         return;

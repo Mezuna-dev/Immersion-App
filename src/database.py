@@ -1156,6 +1156,19 @@ def get_immersion_stats(period: str = 'all_time') -> dict:
         start = (today - timedelta(days=364)).strftime('%Y-%m-%d')
         date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
         params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'this_week':
+        # Monday of the current week
+        start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'this_month':
+        start = today.replace(day=1).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'this_year':
+        start = today.replace(month=1, day=1).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
 
     cur.execute(f"""
         SELECT c.ID, c.Name, c.Color, COALESCE(SUM(l.Duration_Seconds), 0)

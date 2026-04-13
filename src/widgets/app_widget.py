@@ -514,20 +514,20 @@ class AppBridge(QObject):
     def saveImmersionLog(self, category_id, duration_seconds):
         if duration_seconds > 0:
             database.create_immersion_log(category_id, duration_seconds)
-        self.getImmersionStats('all_time')
+        self.web_view.page().runJavaScript('fetchImmersionStats();')
         self.getImmersionLogs()
 
     @pyqtSlot(int, int, str)
     def addManualImmersionLog(self, category_id, duration_seconds, log_date):
         if duration_seconds > 0:
             database.create_immersion_log(category_id, duration_seconds, log_date or None)
-        self.getImmersionStats('all_time')
+        self.web_view.page().runJavaScript('fetchImmersionStats();')
         self.getImmersionLogs()
 
     @pyqtSlot(int)
     def deleteImmersionLog(self, log_id):
         database.delete_immersion_log(log_id)
-        self.getImmersionStats('all_time')
+        self.web_view.page().runJavaScript('fetchImmersionStats();')
         self.getImmersionLogs()
 
     @pyqtSlot(str)
