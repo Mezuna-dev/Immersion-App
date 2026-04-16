@@ -518,7 +518,19 @@
 
                 <!-- Immersion View -->
                 <div id="immersion-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4">Immersion</h1>
+                    <div class="d-flex align-items-end gap-4 mb-4">
+                        <h1 class="mb-0">Immersion</h1>
+                        <ul class="nav immersion-tabs" id="immersion-tabs">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#immersion-tab-timer">Timer</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#immersion-tab-media-tracker">Media Tracker</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="tab-content">
+                    <div class="tab-pane fade show active" id="immersion-tab-timer">
 
                     <!-- Timer + Stats side-by-side -->
                     <div class="row mb-4">
@@ -639,7 +651,115 @@
                                 </div>
                             </div>
                         </div>
+                    </div><!-- /row logs+cats -->
+                    </div><!-- /tab-pane timer -->
+                    <div class="tab-pane fade" id="immersion-tab-media-tracker">
+
+                        <!-- MAL Search -->
+                        <div class="card dash-card mb-4">
+                            <div class="card-body text-white">
+                                <span class="dash-section-title">Anime Search</span>
+                                <div class="d-flex gap-2 mt-3">
+                                    <input type="text" class="form-control settings-input" id="mal-search-input" placeholder="Search anime title…" style="font-size: 0.9rem;" onkeydown="if(event.key==='Enter') animeSearch()">
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="animeSearch()" style="font-weight: 600; white-space: nowrap;">Search</button>
+                                </div>
+                                <div id="mal-search-error" style="display: none; color: #e06c75; font-size: 0.82rem; margin-top: 0.5rem;"></div>
+                                <div id="mal-search-results" style="margin-top: 0.75rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Media Log + Categories side-by-side -->
+                        <div class="row mb-4">
+                            <!-- Media Log -->
+                            <div class="col-md-7 mb-4 mb-md-0">
+                                <div class="card dash-card" style="height: 100%;">
+                                    <div class="card-body text-white">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="dash-section-title">Media Log</span>
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-dark btn-sm" onclick="showFullMediaLog()" style="font-size: 0.8rem; background-color: #3a3555 !important; font-weight: 600;">Full Log</button>
+                                                <button class="btn btn-dark btn-accent btn-sm" onclick="showMediaEntryForm()" style="font-weight: 600; font-size: 0.8rem;">+ Add Entry</button>
+                                            </div>
+                                        </div>
+                                        <!-- Add Entry Form -->
+                                        <div id="media-entry-form" style="display: none;" class="mb-3 p-3" style="background: #1e1b2e; border-radius: 8px;">
+                                            <div class="d-flex flex-wrap gap-2 align-items-end">
+                                                <div style="flex: 2; min-width: 12rem;">
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Title</label>
+                                                    <input type="text" class="form-control settings-input" id="media-entry-title" placeholder="e.g. Demon Slayer" style="font-size: 0.9rem;">
+                                                </div>
+                                                <div style="min-width: 10rem;">
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Category</label>
+                                                    <select class="form-control dash-select" id="media-entry-category" style="font-size: 0.9rem;">
+                                                        <option value="0">— None —</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Hours <span style="color: #555;">(opt)</span></label>
+                                                    <input type="number" class="form-control settings-input" id="media-entry-hours" min="0" placeholder="0" style="width: 5rem; font-size: 0.9rem;">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Minutes <span style="color: #555;">(opt)</span></label>
+                                                    <input type="number" class="form-control settings-input" id="media-entry-minutes" min="0" max="59" placeholder="0" style="width: 5rem; font-size: 0.9rem;">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Date</label>
+                                                    <input type="date" class="form-control settings-input" id="media-entry-date" style="width: 10rem; font-size: 0.9rem;">
+                                                </div>
+                                                <button class="btn btn-dark btn-accent btn-sm" onclick="submitMediaEntry()" style="font-weight: 600; height: 2.4rem;">Add</button>
+                                                <button class="btn btn-dark btn-sm" onclick="hideMediaEntryForm()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.4rem;">Cancel</button>
+                                            </div>
+                                        </div>
+                                        <div id="media-entries-list" style="max-height: 380px; overflow-y: auto;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Categories -->
+                            <div class="col-md-5">
+                                <div class="card dash-card" style="height: 100%;">
+                                    <div class="card-body text-white">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="dash-section-title">Categories</span>
+                                            <button class="btn btn-dark btn-accent btn-sm" onclick="showCreateMediaCategoryForm()" style="font-weight: 600; font-size: 0.8rem;">+ New</button>
+                                        </div>
+                                        <div id="media-create-category-form" style="display: none;" class="mb-3">
+                                            <div class="d-flex gap-2 align-items-end">
+                                                <div style="flex: 1;">
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Name</label>
+                                                    <input type="text" class="form-control settings-input" id="media-new-category-name" placeholder="e.g. Manga" style="font-size: 0.9rem;">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.78rem; color: #888;">Color</label>
+                                                    <input type="color" id="media-new-category-color" value="#9067C6" style="width: 3rem; height: 2.4rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
+                                                </div>
+                                                <button class="btn btn-dark btn-accent btn-sm" onclick="submitCreateMediaCategory()" style="font-weight: 600; height: 2.4rem;">Add</button>
+                                                <button class="btn btn-dark btn-sm" onclick="hideCreateMediaCategoryForm()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.4rem;">Cancel</button>
+                                            </div>
+                                        </div>
+                                        <div id="media-category-list" style="max-height: 380px; overflow-y: auto;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /tab-pane media tracker -->
+                    </div><!-- /tab-content -->
+
+                <!-- Full Media Log Modal -->
+                <div id="full-media-log-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
+                    <div style="background:#1e1b2e; border-radius:12px; width:min(92vw,720px); max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 40px #0008;">
+                        <div class="d-flex justify-content-between align-items-center p-3" style="border-bottom:1px solid #3a3555;">
+                            <span class="dash-section-title" style="margin:0;">Full Media Log</span>
+                            <button class="btn btn-sm" onclick="hideFullMediaLog()" style="color:#888; font-size:1.1rem; line-height:1; padding:0.2rem 0.5rem;">✕</button>
+                        </div>
+                        <div class="d-flex gap-2 p-3" style="border-bottom:1px solid #3a3555;">
+                            <input type="text" id="full-media-log-search" class="form-control settings-input" placeholder="Search titles…" oninput="renderFullMediaLog()" style="font-size:0.88rem;">
+                            <select id="full-log-category-filter" class="form-control dash-select" onchange="renderFullMediaLog()" style="font-size:0.88rem; min-width:9rem; width:auto;">
+                                <option value="">All types</option>
+                            </select>
+                        </div>
+                        <div id="full-media-log-list" style="overflow-y:auto; padding:0.75rem 1rem; flex:1;"></div>
                     </div>
+                </div>
                 </div>
 
                 <!-- Settings View -->

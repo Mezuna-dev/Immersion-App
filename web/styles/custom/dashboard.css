@@ -439,6 +439,36 @@ body {
     border-color: var(--accent) !important;
 }
 
+/* === Immersion Tabs === */
+.immersion-tabs {
+    padding-bottom: 3px; /* align with h1 border-bottom */
+}
+
+.immersion-tabs .nav-link {
+    color: #888;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.immersion-tabs .nav-link:hover {
+    color: #fff;
+    border-bottom-color: #4a4060;
+}
+
+.immersion-tabs .nav-link.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: none;
+}
+
 /* === Immersion Timer === */
 .immersion-timer-display {
     font-family: 'Inter', sans-serif;

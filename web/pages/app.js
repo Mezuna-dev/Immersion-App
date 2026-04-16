@@ -261,6 +261,8 @@ function showView(viewId) {
         bridge.getImmersionCategories();
         fetchImmersionStats();
         bridge.getImmersionLogs();
+        bridge.getMediaCategories();
+        bridge.getMediaEntries();
     }
 }
 
@@ -2130,6 +2132,26 @@ function savePreviewStyling() {
 // Immersion Section
 // ===========================================================
 
+document.addEventListener('DOMContentLoaded', function() {
+    var immersionTabsEl = document.getElementById('immersion-tabs');
+    if (immersionTabsEl) {
+        immersionTabsEl.addEventListener('shown.bs.tab', function() {
+            if (bridge) {
+                fetchImmersionStats();
+                bridge.getImmersionLogs();
+                bridge.getMediaEntries();
+            }
+        });
+    }
+
+    var fullLogModal = document.getElementById('full-media-log-modal');
+    if (fullLogModal) {
+        fullLogModal.addEventListener('click', function(e) {
+            if (e.target === fullLogModal) hideFullMediaLog();
+        });
+    }
+});
+
 var immersionCategories = [];
 var immersionTimerInterval = null;
 var immersionTimerSeconds = 0;
@@ -2260,6 +2282,7 @@ function populateImmersionCategorySelects() {
         });
         if (manualVal) manualSel.value = manualVal;
     }
+
 }
 
 function renderImmersionCategoryList() {
@@ -2474,8 +2497,429 @@ function submitManualLog() {
     hideManualLogForm();
 }
 
+// --- Media Categories ---
+
+var mediaCategories = [];
+
+function updateMediaCategories(cats) {
+    mediaCategories = cats;
+    populateMediaCategorySelect();
+    renderMediaCategoryList();
+}
+
+function populateMediaCategorySelect() {
+    var sel = document.getElementById('media-entry-category');
+    if (!sel) return;
+    var prev = sel.value;
+    sel.innerHTML = '<option value="0">— None —</option>';
+    mediaCategories.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        sel.appendChild(opt);
+    });
+    if (prev) sel.value = prev;
+}
+
+function renderMediaCategoryList() {
+    var container = document.getElementById('media-category-list');
+    if (!container) return;
+    if (!mediaCategories.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No categories yet.</p>';
+        return;
+    }
+    var html = '';
+    mediaCategories.forEach(function(c) {
+        html += '<div class="immersion-category-row" id="media-cat-row-' + c.id + '">'
+            + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
+            + '<span style="flex: 1; font-size: 0.88rem; color: #fff;">' + escapeHtml(c.name) + '</span>'
+            + '<button class="btn btn-sm" onclick="editMediaCategory(' + c.id + ')" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Edit</button>'
+            + '<button class="btn btn-sm" onclick="deleteMediaCategory(' + c.id + ', \'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')" style="color: #e74c3c; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Delete</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function showCreateMediaCategoryForm() {
+    document.getElementById('media-create-category-form').style.display = '';
+    document.getElementById('media-new-category-name').value = '';
+    document.getElementById('media-new-category-color').value = '#9067C6';
+}
+
+function hideCreateMediaCategoryForm() {
+    document.getElementById('media-create-category-form').style.display = 'none';
+}
+
+function submitCreateMediaCategory() {
+    var name = document.getElementById('media-new-category-name').value.trim();
+    var color = document.getElementById('media-new-category-color').value;
+    if (!name) { showAlert('Please enter a category name.'); return; }
+    if (bridge) bridge.createMediaCategory(name, color);
+    hideCreateMediaCategoryForm();
+}
+
+function editMediaCategory(catId) {
+    var cat = mediaCategories.find(function(c) { return c.id === catId; });
+    if (!cat) return;
+    var row = document.getElementById('media-cat-row-' + catId);
+    row.innerHTML = '<input type="text" class="form-control settings-input" value="' + escapeHtml(cat.name) + '" style="flex:1; font-size:0.85rem; height:2rem;" id="media-cat-edit-name-' + catId + '">'
+        + '<input type="color" value="' + cat.color + '" style="width:2.4rem; height:2rem; border:none; border-radius:4px; cursor:pointer; padding:2px; background:none;" id="media-cat-edit-color-' + catId + '">'
+        + '<button class="btn btn-sm btn-accent" onclick="saveMediaCategoryEdit(' + catId + ')" style="font-size:0.75rem; padding:0.15rem 0.5rem;">Save</button>'
+        + '<button class="btn btn-sm" onclick="renderMediaCategoryList()" style="color:#888; font-size:0.75rem; padding:0.15rem 0.4rem;">Cancel</button>';
+}
+
+function saveMediaCategoryEdit(catId) {
+    var name = document.getElementById('media-cat-edit-name-' + catId).value.trim();
+    var color = document.getElementById('media-cat-edit-color-' + catId).value;
+    if (!name) return;
+    if (bridge) bridge.updateMediaCategory(catId, name, color);
+}
+
+function deleteMediaCategory(catId, catName) {
+    showConfirm('Delete category "' + catName + '"? Existing entries will become uncategorised.', function() {
+        if (bridge) bridge.deleteMediaCategory(catId);
+    });
+}
+
+// --- Media Tracker ---
+
+var mediaEntries = [];
+
+function updateMediaEntries(entries) {
+    mediaEntries = entries;
+    renderMediaEntries();
+}
+
+function renderMediaEntries() {
+    var container = document.getElementById('media-entries-list');
+    if (!container) return;
+    if (!mediaEntries.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No entries yet. Add one above.</p>';
+        return;
+    }
+    var html = '';
+    mediaEntries.forEach(function(e) {
+        var catDot = e.category_color
+            ? '<span class="immersion-color-dot" style="background-color: ' + e.category_color + '; flex-shrink: 0;"></span>'
+            : '<span class="immersion-color-dot" style="background-color: #555; flex-shrink: 0;"></span>';
+        var catLabel = e.category_name
+            ? '<span style="color: #bbb; font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
+            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
+        var durLabel = e.duration_seconds
+            ? '<span style="color: #aaa; font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
+            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
+        html += '<div class="immersion-log-row" style="color: #fff;">'
+            + catDot
+            + '<span style="flex: 1; font-weight: 600; font-size: 0.9rem;">' + escapeHtml(e.title) + '</span>'
+            + catLabel
+            + '<span style="color: #888; font-size: 0.8rem; min-width: 6rem; text-align: right;">' + (e.entry_date || '') + '</span>'
+            + durLabel
+            + '<button class="btn btn-sm" onclick="deleteMediaEntry(' + e.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function showMediaEntryForm() {
+    var form = document.getElementById('media-entry-form');
+    form.style.display = '';
+    document.getElementById('media-entry-title').value = '';
+    document.getElementById('media-entry-hours').value = '';
+    document.getElementById('media-entry-minutes').value = '';
+    var today = new Date();
+    var yyyy = today.getFullYear();
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('media-entry-date').value = yyyy + '-' + mm + '-' + dd;
+}
+
+function hideMediaEntryForm() {
+    document.getElementById('media-entry-form').style.display = 'none';
+}
+
+function submitMediaEntry() {
+    var title = document.getElementById('media-entry-title').value.trim();
+    var catId = parseInt(document.getElementById('media-entry-category').value) || 0;
+    var hours = parseInt(document.getElementById('media-entry-hours').value) || 0;
+    var minutes = parseInt(document.getElementById('media-entry-minutes').value) || 0;
+    var entryDate = document.getElementById('media-entry-date').value;
+    if (!title) { showAlert('Please enter a title.'); return; }
+    if (!entryDate) { showAlert('Please select a date.'); return; }
+    var totalSeconds = (hours * 3600) + (minutes * 60);
+    if (bridge) bridge.createMediaEntry(title, catId, totalSeconds, entryDate);
+    hideMediaEntryForm();
+}
+
+function deleteMediaEntry(entryId) {
+    showConfirm('Delete this media entry?', function() {
+        if (bridge) bridge.deleteMediaEntry(entryId);
+    });
+}
+
+var allFullMediaEntries = [];
+
+function showFullMediaLog() {
+    var modal = document.getElementById('full-media-log-modal');
+    modal.style.display = 'flex';
+    document.getElementById('full-media-log-search').value = '';
+    document.getElementById('full-log-category-filter').value = '';
+    document.getElementById('full-media-log-list').innerHTML = '<p style="color:#888; font-size:0.88rem;">Loading…</p>';
+    if (bridge) bridge.getAllMediaEntries();
+}
+
+function hideFullMediaLog() {
+    document.getElementById('full-media-log-modal').style.display = 'none';
+}
+
+function updateFullMediaEntries(entries) {
+    allFullMediaEntries = entries;
+    var sel = document.getElementById('full-log-category-filter');
+    var current = sel.value;
+    var names = [];
+    entries.forEach(function(e) {
+        if (e.category_name && names.indexOf(e.category_name) === -1) names.push(e.category_name);
+    });
+    names.sort();
+    sel.innerHTML = '<option value="">All types</option>';
+    names.forEach(function(n) {
+        var opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        if (n === current) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    renderFullMediaLog();
+}
+
+function renderFullMediaLog() {
+    var container = document.getElementById('full-media-log-list');
+    if (!container) return;
+    var query = (document.getElementById('full-media-log-search').value || '').toLowerCase().trim();
+    var catFilter = document.getElementById('full-log-category-filter').value;
+    var filtered = allFullMediaEntries.filter(function(e) {
+        if (catFilter && e.category_name !== catFilter) return false;
+        if (query && e.title.toLowerCase().indexOf(query) === -1) return false;
+        return true;
+    });
+    if (!filtered.length) {
+        container.innerHTML = '<p style="color:#888; font-size:0.88rem;">' + (allFullMediaEntries.length ? 'No entries match.' : 'No entries yet.') + '</p>';
+        return;
+    }
+    var html = '';
+    filtered.forEach(function(e) {
+        var catDot = e.category_color
+            ? '<span class="immersion-color-dot" style="background-color: ' + e.category_color + '; flex-shrink: 0;"></span>'
+            : '<span class="immersion-color-dot" style="background-color: #555; flex-shrink: 0;"></span>';
+        var catLabel = e.category_name
+            ? '<span style="color: #bbb; font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
+            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
+        var durLabel = e.duration_seconds
+            ? '<span style="color: #aaa; font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
+            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
+        html += '<div class="immersion-log-row" style="color: #fff;">'
+            + catDot
+            + '<span style="flex: 1; font-weight: 600; font-size: 0.9rem;">' + escapeHtml(e.title) + '</span>'
+            + catLabel
+            + '<span style="color: #888; font-size: 0.8rem; min-width: 6rem; text-align: right;">' + (e.entry_date || '') + '</span>'
+            + durLabel
+            + '<button class="btn btn-sm" onclick="deleteMediaEntryFromModal(' + e.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function deleteMediaEntryFromModal(entryId) {
+    showConfirm('Delete this media entry?', function() {
+        if (bridge) bridge.deleteMediaEntry(entryId);
+        if (bridge) bridge.getAllMediaEntries();
+    });
+}
+
+// --- Anime Search (Jikan) ---
+
+function animeSearch() {
+    var query = document.getElementById('mal-search-input').value.trim();
+    if (!query) return;
+    document.getElementById('mal-search-results').innerHTML = '<p style="color:#888; font-size:0.85rem;">Searching…</p>';
+    document.getElementById('mal-search-error').style.display = 'none';
+    if (bridge) bridge.searchAnime(query);
+}
+
+var animeEpisodesCache = {};
+var animeDurationCache = {};
+
+function parseDurationToHoursMinutes(durationStr) {
+    if (!durationStr || durationStr === 'Unknown') return null;
+    var totalMinutes = 0;
+    var hrMatch = durationStr.match(/(\d+)\s*hr/);
+    var minMatch = durationStr.match(/(\d+)\s*min/);
+    if (hrMatch) totalMinutes += parseInt(hrMatch[1]) * 60;
+    if (minMatch) totalMinutes += parseInt(minMatch[1]);
+    if (totalMinutes === 0) return null;
+    return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
+}
+
+function updateAnimeSearchResults(items, error) {
+    animeEpisodesCache = {};
+    animeDurationCache = {};
+    var errEl = document.getElementById('mal-search-error');
+    var resultsEl = document.getElementById('mal-search-results');
+    if (error) {
+        errEl.textContent = error;
+        errEl.style.display = '';
+        resultsEl.innerHTML = '';
+        return;
+    }
+    errEl.style.display = 'none';
+    if (!items.length) {
+        resultsEl.innerHTML = '<p style="color:#888; font-size:0.85rem;">No results found.</p>';
+        return;
+    }
+    var html = '<div class="d-flex flex-column gap-1">';
+    items.forEach(function(item) {
+        var displayTitle = item.title_english || item.title;
+        if (item.duration) animeDurationCache[item.id] = item.duration;
+        var typeLabel = item.type || '';
+        var epLabel = item.episodes ? item.episodes + ' ep' : '';
+        var scoreLabel = item.score ? '★ ' + Number(item.score).toFixed(2) : '';
+        var meta = [typeLabel, epLabel, scoreLabel].filter(Boolean).join(' · ');
+        var isMovie = item.type === 'Movie';
+        var img = item.image
+            ? '<img src="' + item.image + '" style="width:3rem; height:4.2rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
+            : '<div style="width:3rem; height:4.2rem; background:#1e1b2e; border-radius:4px; flex-shrink:0;"></div>';
+        var epToggle = !isMovie
+            ? '<button id="anime-ep-toggle-' + item.id + '" class="btn btn-dark btn-sm" onclick="toggleAnimeEpisodes(' + item.id + ', ' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; background:#3a3555 !important;">▼ Episodes</button>'
+            : '';
+        html += '<div style="background:#1e1b2e; border-radius:6px; overflow:hidden;">'
+            + '<div class="d-flex align-items-center gap-3 p-2">'
+            + img
+            + '<div style="flex:1; min-width:0;">'
+            + '<div style="font-weight:600; font-size:0.9rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
+            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.75rem; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
+            + '<div style="font-size:0.75rem; color:#888; margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
+            + '</div>'
+            + epToggle
+            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectAnime(' + item.id + ', ' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap;">+ Add</button>'
+            + '</div>'
+            + '<div id="anime-episodes-' + item.id + '" style="display:none;"></div>'
+            + '</div>';
+    });
+    html += '</div>';
+    resultsEl.innerHTML = html;
+}
+
+function toggleAnimeEpisodes(animeId, seriesTitle) {
+    var container = document.getElementById('anime-episodes-' + animeId);
+    var btn = document.getElementById('anime-ep-toggle-' + animeId);
+    if (!container) return;
+    var opening = container.style.display === 'none';
+    container.style.display = opening ? '' : 'none';
+    if (btn) btn.textContent = opening ? '▲ Episodes' : '▼ Episodes';
+    if (opening && !animeEpisodesCache[animeId]) {
+        animeEpisodesCache[animeId] = { items: [], hasNextPage: false, page: 0, seriesTitle: seriesTitle, loading: true };
+        container.innerHTML = '<p style="color:#888; font-size:0.82rem; padding:0.5rem 0.75rem;">Loading episodes…</p>';
+        if (bridge) bridge.fetchAnimeEpisodes(animeId, 1);
+    }
+}
+
+function updateAnimeEpisodes(animeId, items, hasNextPage, page, error) {
+    var container = document.getElementById('anime-episodes-' + animeId);
+    if (!container) return;
+    if (error) {
+        container.innerHTML = '<p style="color:#e06c75; font-size:0.82rem; padding:0.5rem 0.75rem;">' + escapeHtml(error) + '</p>';
+        return;
+    }
+    var cached = animeEpisodesCache[animeId] || { items: [], seriesTitle: '' };
+    cached.loading = false;
+    if (page === 1) {
+        cached.items = items;
+    } else {
+        cached.items = cached.items.concat(items);
+    }
+    cached.hasNextPage = hasNextPage;
+    cached.page = page;
+    animeEpisodesCache[animeId] = cached;
+    renderAnimeEpisodes(animeId);
+}
+
+function renderAnimeEpisodes(animeId) {
+    var container = document.getElementById('anime-episodes-' + animeId);
+    if (!container) return;
+    var cached = animeEpisodesCache[animeId];
+    if (!cached) return;
+    var seriesTitle = cached.seriesTitle;
+
+    var html = '<div style="border-top:1px solid #3a3555; max-height:16rem; overflow-y:auto;">';
+    if (!cached.items.length) {
+        html += '<p style="color:#888; font-size:0.82rem; padding:0.5rem 0.75rem;">No episodes found.</p>';
+    } else {
+        cached.items.forEach(function(ep) {
+            var label = 'Ep. ' + ep.num + (ep.title ? ': ' + ep.title : '');
+            var badges = '';
+            if (ep.filler) badges += ' <span style="font-size:0.62rem; background:#2d2a3e; color:#888; border-radius:3px; padding:0.05rem 0.3rem;">Filler</span>';
+            if (ep.recap) badges += ' <span style="font-size:0.62rem; background:#2d2a3e; color:#888; border-radius:3px; padding:0.05rem 0.3rem;">Recap</span>';
+            html += '<div class="d-flex align-items-center gap-2" style="padding:0.35rem 0.75rem; border-bottom:1px solid #2d2a3e;">'
+                + '<span style="flex:1; font-size:0.82rem; color:#fff;">' + escapeHtml(label) + badges + '</span>'
+                + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectEpisode(' + animeId + ',' + jsonAttr(seriesTitle) + ',' + ep.num + ',' + jsonAttr(ep.title || '') + ')" style="font-size:0.68rem; padding:0.1rem 0.45rem; white-space:nowrap;">+ Add</button>'
+                + '</div>';
+        });
+    }
+    html += '</div>';
+    if (cached.hasNextPage) {
+        html += '<div style="padding:0.4rem 0.75rem;">'
+            + '<button class="btn btn-sm" onclick="loadMoreEpisodes(' + animeId + ',' + (cached.page + 1) + ')" style="color:#888; font-size:0.78rem;">Load more episodes…</button>'
+            + '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function loadMoreEpisodes(animeId, page) {
+    var cached = animeEpisodesCache[animeId];
+    if (!cached || cached.loading) return;
+    cached.loading = true;
+    var container = document.getElementById('anime-episodes-' + animeId);
+    if (container) {
+        var btn = container.querySelector('button');
+        if (btn && btn.textContent.indexOf('Load more') !== -1) btn.textContent = 'Loading…';
+    }
+    if (bridge) bridge.fetchAnimeEpisodes(animeId, page);
+}
+
+function fillDurationFields(animeId) {
+    var duration = animeDurationCache[animeId];
+    if (!duration) return;
+    var parsed = parseDurationToHoursMinutes(duration);
+    if (!parsed) return;
+    document.getElementById('media-entry-hours').value = parsed.hours > 0 ? parsed.hours : '';
+    document.getElementById('media-entry-minutes').value = parsed.minutes > 0 ? parsed.minutes : '';
+}
+
+function selectEpisode(animeId, seriesTitle, epNum, epTitle) {
+    var title = seriesTitle + ' - Ep. ' + epNum + (epTitle ? ': ' + epTitle : '');
+    showMediaEntryForm();
+    document.getElementById('media-entry-title').value = title;
+    var animeCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'anime'; });
+    if (animeCat) document.getElementById('media-entry-category').value = animeCat.id;
+    fillDurationFields(animeId);
+}
+
+function selectAnime(animeId, title) {
+    showMediaEntryForm();
+    document.getElementById('media-entry-title').value = title;
+    var animeCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'anime'; });
+    if (animeCat) document.getElementById('media-entry-category').value = animeCat.id;
+    fillDurationFields(animeId);
+    document.getElementById('mal-search-results').innerHTML = '';
+    document.getElementById('mal-search-input').value = '';
+}
+
 function escapeHtml(text) {
     var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Serialize a value to JSON safe for embedding inside an HTML attribute (quotes escaped as &quot;)
+function jsonAttr(val) {
+    return JSON.stringify(val).replace(/"/g, '&quot;');
 }

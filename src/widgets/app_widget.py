@@ -4,8 +4,10 @@ from PyQt6.QtCore import QObject, pyqtSlot, QUrl
 from PyQt6.QtGui import QColor
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from pathlib import Path
 import json
+import urllib.parse
 import database
 import scheduler
 
@@ -14,6 +16,7 @@ class AppBridge(QObject):
     def __init__(self, web_view):
         super().__init__()
         self.web_view = web_view
+        self.network_manager = QNetworkAccessManager()
 
     @pyqtSlot()
     def refreshStats(self):
@@ -539,6 +542,142 @@ class AppBridge(QObject):
     def getImmersionLogs(self):
         logs = database.get_immersion_logs()
         self.web_view.page().runJavaScript(f'updateImmersionLogs({json.dumps(logs)});')
+
+    # --- Media Tracker ---
+
+    @pyqtSlot(str, int, int, str)
+    def createMediaEntry(self, title, category_id, duration_seconds, entry_date):
+        if title.strip():
+            database.create_media_entry(
+                title.strip(),
+                category_id if category_id > 0 else None,
+                duration_seconds if duration_seconds > 0 else None,
+                entry_date or None,
+            )
+        self.getMediaEntries()
+
+    @pyqtSlot()
+    def getMediaEntries(self):
+        entries = database.get_media_entries()
+        self.web_view.page().runJavaScript(f'updateMediaEntries({json.dumps(entries)});')
+
+    @pyqtSlot()
+    def getAllMediaEntries(self):
+        entries = database.get_media_entries(limit=10000)
+        self.web_view.page().runJavaScript(f'updateFullMediaEntries({json.dumps(entries)});')
+
+    @pyqtSlot(int)
+    def deleteMediaEntry(self, entry_id):
+        database.delete_media_entry(entry_id)
+        self.getMediaEntries()
+
+    # --- Media Categories ---
+
+    @pyqtSlot(str, str)
+    def createMediaCategory(self, name, color):
+        if name.strip():
+            database.create_media_category(name.strip(), color or '#9067C6')
+        self.getMediaCategories()
+
+    @pyqtSlot()
+    def getMediaCategories(self):
+        cats = database.get_all_media_categories()
+        self.web_view.page().runJavaScript(f'updateMediaCategories({json.dumps(cats)});')
+
+    @pyqtSlot(int, str, str)
+    def updateMediaCategory(self, cat_id, name, color):
+        if name.strip():
+            database.update_media_category(cat_id, name.strip(), color)
+        self.getMediaCategories()
+
+    @pyqtSlot(int)
+    def deleteMediaCategory(self, cat_id):
+        database.delete_media_category(cat_id)
+        self.getMediaCategories()
+        self.getMediaEntries()
+
+    # --- Anime Search (Jikan) ---
+
+    @pyqtSlot(str)
+    def searchAnime(self, query):
+        if not query.strip():
+            return
+        encoded = urllib.parse.quote(query.strip())
+        url = QUrl(f'https://api.jikan.moe/v4/anime?q={encoded}&limit=10&sfw=true')
+        request = QNetworkRequest(url)
+        reply = self.network_manager.get(request)
+        reply.finished.connect(lambda: self._on_anime_search_finished(reply))
+
+    def _on_anime_search_finished(self, reply):
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            err = reply.errorString()
+            self.web_view.page().runJavaScript(
+                f'updateAnimeSearchResults([], {json.dumps("Search failed: " + err)});'
+            )
+            reply.deleteLater()
+            return
+        data = bytes(reply.readAll()).decode('utf-8')
+        reply.deleteLater()
+        try:
+            result = json.loads(data)
+            items = []
+            for entry in result.get('data', []):
+                images = entry.get('images', {})
+                jpg = images.get('jpg', {})
+                items.append({
+                    'id': entry.get('mal_id'),
+                    'title': entry.get('title', ''),
+                    'title_english': entry.get('title_english') or '',
+                    'image': jpg.get('image_url', ''),
+                    'episodes': entry.get('episodes'),
+                    'type': entry.get('type', ''),
+                    'score': entry.get('score'),
+                    'duration': entry.get('duration', ''),
+                })
+            self.web_view.page().runJavaScript(
+                f'updateAnimeSearchResults({json.dumps(items)}, null);'
+            )
+        except Exception as e:
+            self.web_view.page().runJavaScript(
+                f'updateAnimeSearchResults([], {json.dumps(str(e))});'
+            )
+
+    @pyqtSlot(int, int)
+    def fetchAnimeEpisodes(self, anime_id, page):
+        url = QUrl(f'https://api.jikan.moe/v4/anime/{anime_id}/episodes?page={page}')
+        request = QNetworkRequest(url)
+        reply = self.network_manager.get(request)
+        reply.finished.connect(lambda: self._on_episodes_finished(reply, anime_id, page))
+
+    def _on_episodes_finished(self, reply, anime_id, page):
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            err = reply.errorString()
+            self.web_view.page().runJavaScript(
+                f'updateAnimeEpisodes({anime_id}, [], false, {page}, {json.dumps("Failed: " + err)});'
+            )
+            reply.deleteLater()
+            return
+        data = bytes(reply.readAll()).decode('utf-8')
+        reply.deleteLater()
+        try:
+            result = json.loads(data)
+            pagination = result.get('pagination', {})
+            has_next = pagination.get('has_next_page', False)
+            items = []
+            for ep in result.get('data', []):
+                items.append({
+                    'num': ep.get('mal_id'),
+                    'title': ep.get('title') or ep.get('title_romanji') or '',
+                    'filler': ep.get('filler', False),
+                    'recap': ep.get('recap', False),
+                })
+            self.web_view.page().runJavaScript(
+                f'updateAnimeEpisodes({anime_id}, {json.dumps(items)}, {json.dumps(has_next)}, {page}, null);'
+            )
+        except Exception as e:
+            self.web_view.page().runJavaScript(
+                f'updateAnimeEpisodes({anime_id}, [], false, {page}, {json.dumps(str(e))});'
+            )
 
 
 class AppWidget(QWidget):

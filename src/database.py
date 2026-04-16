@@ -186,9 +186,34 @@ def initialize_database():
                 )
         """)
 
+        # MediaCategory Table
+        cur.execute("""
+            CREATE TABLE MediaCategory (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Color TEXT NOT NULL DEFAULT '#9067C6',
+                Date_Created TEXT NOT NULL
+                )
+        """)
+
+        # MediaEntry Table
+        cur.execute("""
+            CREATE TABLE MediaEntry (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Title TEXT NOT NULL,
+                Category_ID INTEGER,
+                Duration_Seconds INTEGER,
+                Entry_Date TEXT NOT NULL,
+                Date_Created TEXT NOT NULL,
+                FOREIGN KEY (Category_ID) REFERENCES MediaCategory(ID)
+                )
+        """)
+
         con.commit()
         con.close()
         seed_default_card_type()
+        seed_default_immersion_categories()
+        seed_default_media_categories()
 
 
 def migrate_database():
@@ -238,6 +263,21 @@ def migrate_database():
             Date_Created TEXT NOT NULL,
             FOREIGN KEY (Category_ID) REFERENCES ImmersionCategory(ID)
         )""",
+        """CREATE TABLE IF NOT EXISTS MediaCategory (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Color TEXT NOT NULL DEFAULT '#9067C6',
+            Date_Created TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS MediaEntry (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Title TEXT NOT NULL,
+            Category_ID INTEGER,
+            Duration_Seconds INTEGER,
+            Entry_Date TEXT NOT NULL,
+            Date_Created TEXT NOT NULL,
+            FOREIGN KEY (Category_ID) REFERENCES MediaCategory(ID)
+        )""",
     ]:
         try:
             cur.execute(tbl_stmt)
@@ -246,6 +286,8 @@ def migrate_database():
             pass
 
     con.close()
+    seed_default_immersion_categories()
+    seed_default_media_categories()
 
 
 # ===========================================================
@@ -441,6 +483,41 @@ def delete_deck_by_name(name):
     con.close()
 
 # --- CardType Functions --------------------------------
+
+DEFAULT_IMMERSION_CATEGORIES = [
+    ('Anime',    '#4e9af1'),
+    ('Manga',    '#e06c75'),
+    ('Book',     '#56b6c2'),
+    ('Movie',    '#d19a66'),
+    ('TV Show',  '#c678dd'),
+]
+
+def seed_default_immersion_categories():
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM ImmersionCategory")
+    if cur.fetchone()[0] == 0:
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur.executemany(
+            "INSERT INTO ImmersionCategory (Name, Color, Date_Created) VALUES (?, ?, ?)",
+            [(name, color, today) for name, color in DEFAULT_IMMERSION_CATEGORIES]
+        )
+        con.commit()
+    con.close()
+
+def seed_default_media_categories():
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM MediaCategory")
+    if cur.fetchone()[0] == 0:
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur.executemany(
+            "INSERT INTO MediaCategory (Name, Color, Date_Created) VALUES (?, ?, ?)",
+            [(name, color, today) for name, color in DEFAULT_IMMERSION_CATEGORIES]
+        )
+        con.commit()
+    con.close()
+
 
 def seed_default_card_type():
     con = create_db_connection()
@@ -1106,8 +1183,16 @@ def update_immersion_category(cat_id: int, name: str, color: str):
 def delete_immersion_category(cat_id: int):
     con = create_db_connection()
     cur = con.cursor()
+    cur.execute("SELECT Name FROM ImmersionCategory WHERE ID = ?", (cat_id,))
+    row = cur.fetchone()
     cur.execute("DELETE FROM ImmersionLog WHERE Category_ID = ?", (cat_id,))
     cur.execute("DELETE FROM ImmersionCategory WHERE ID = ?", (cat_id,))
+    if row:
+        cur.execute("SELECT ID FROM MediaCategory WHERE Name = ? COLLATE NOCASE", (row[0],))
+        media_row = cur.fetchone()
+        if media_row:
+            cur.execute("UPDATE MediaEntry SET Category_ID = NULL WHERE Category_ID = ?", (media_row[0],))
+            cur.execute("DELETE FROM MediaCategory WHERE ID = ?", (media_row[0],))
     con.commit()
     con.close()
 
@@ -1222,3 +1307,109 @@ def get_immersion_logs(category_id: int = None, limit: int = 50) -> list:
         'category_color': r[3], 'duration_seconds': r[4],
         'log_date': r[5], 'date_created': r[6],
     } for r in rows]
+
+
+# Section: Media Tracker Functions
+
+def create_media_category(name: str, color: str = '#9067C6') -> int:
+    con = create_db_connection()
+    cur = con.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    cur.execute(
+        "INSERT INTO MediaCategory (Name, Color, Date_Created) VALUES (?, ?, ?)",
+        (name, color, today)
+    )
+    new_id = cur.lastrowid
+    con.commit()
+    con.close()
+    return new_id
+
+
+def get_all_media_categories() -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID, Name, Color, Date_Created FROM MediaCategory ORDER BY Name ASC")
+    rows = cur.fetchall()
+    con.close()
+    return [{'id': r[0], 'name': r[1], 'color': r[2], 'date_created': r[3]} for r in rows]
+
+
+def update_media_category(cat_id: int, name: str, color: str):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE MediaCategory SET Name = ?, Color = ? WHERE ID = ?", (name, color, cat_id))
+    con.commit()
+    con.close()
+
+
+def delete_media_category(cat_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT Name FROM MediaCategory WHERE ID = ?", (cat_id,))
+    row = cur.fetchone()
+    cur.execute("UPDATE MediaEntry SET Category_ID = NULL WHERE Category_ID = ?", (cat_id,))
+    cur.execute("DELETE FROM MediaCategory WHERE ID = ?", (cat_id,))
+    if row:
+        cur.execute("SELECT ID FROM ImmersionCategory WHERE Name = ? COLLATE NOCASE", (row[0],))
+        imm_row = cur.fetchone()
+        if imm_row:
+            cur.execute("DELETE FROM ImmersionLog WHERE Category_ID = ?", (imm_row[0],))
+            cur.execute("DELETE FROM ImmersionCategory WHERE ID = ?", (imm_row[0],))
+    con.commit()
+    con.close()
+
+
+def create_media_entry(title: str, category_id: int, duration_seconds: int, entry_date: str = None) -> int:
+    con = create_db_connection()
+    cur = con.cursor()
+    creation_date = datetime.now().strftime('%Y-%m-%d')
+    if not entry_date:
+        entry_date = creation_date
+    cur.execute("""
+        INSERT INTO MediaEntry (Title, Category_ID, Duration_Seconds, Entry_Date, Date_Created)
+        VALUES (?, ?, ?, ?, ?)
+    """, (title, category_id, duration_seconds, entry_date, creation_date))
+    new_id = cur.lastrowid
+    if duration_seconds and duration_seconds > 0 and category_id:
+        cur.execute("SELECT Name FROM MediaCategory WHERE ID = ?", (category_id,))
+        media_cat = cur.fetchone()
+        if media_cat:
+            cur.execute("SELECT ID FROM ImmersionCategory WHERE Name = ? COLLATE NOCASE", (media_cat[0],))
+            imm_cat = cur.fetchone()
+            if imm_cat:
+                log_date = entry_date or creation_date
+                log_created = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                cur.execute("""
+                    INSERT INTO ImmersionLog (Category_ID, Duration_Seconds, Log_Date, Date_Created)
+                    VALUES (?, ?, ?, ?)
+                """, (imm_cat[0], duration_seconds, log_date, log_created))
+    con.commit()
+    con.close()
+    return new_id
+
+
+def get_media_entries(limit: int = 100) -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT m.ID, m.Title, m.Category_ID, c.Name, c.Color, m.Duration_Seconds, m.Entry_Date, m.Date_Created
+        FROM MediaEntry m
+        LEFT JOIN MediaCategory c ON m.Category_ID = c.ID
+        ORDER BY m.Entry_Date DESC, m.Date_Created DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cur.fetchall()
+    con.close()
+    return [{
+        'id': r[0], 'title': r[1], 'category_id': r[2],
+        'category_name': r[3], 'category_color': r[4],
+        'duration_seconds': r[5], 'entry_date': r[6], 'date_created': r[7],
+    } for r in rows]
+
+
+def delete_media_entry(entry_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM MediaEntry WHERE ID = ?", (entry_id,))
+    con.commit()
+    con.close()
