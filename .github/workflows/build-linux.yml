@@ -61,14 +61,14 @@ jobs:
         run: |
           mkdir -p installer/output
           makeself dist/ImmersionSuite \
-            installer/output/ImmersionSuite_v1.2.0_Linux_x86_64.run \
-            "Immersion Suite v1.2.0" \
+            installer/output/ImmersionSuite_v1.3.0_Linux_x86_64.run \
+            "Immersion Suite v1.3.0" \
             ./linux_setup.sh
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmersionSuite-v1.2.0-Linux-x86_64
+          name: ImmersionSuite-v1.3.0-Linux-x86_64
           path: installer/output/*.run
           retention-days: 30
 

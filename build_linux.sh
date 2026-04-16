@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Build script for Immersion Suite v1.2.0 Linux installer
+# Build script for Immersion Suite v1.3.0 Linux installer
 # Run this from the repository root on a Linux machine.
 # Requirements:
 #   pip install pyinstaller pillow
