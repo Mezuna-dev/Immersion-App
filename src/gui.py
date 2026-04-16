@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QProgressDialog, QMessageBox
+from PyQt6.QtGui import QIcon
 import sys
+import os
 import database
 from widgets.app_widget import AppWidget
 from utils.import_thread import ImportThread
@@ -13,6 +15,11 @@ class MainWindow(QMainWindow):
         database.migrate_database()
 
         self.setWindowTitle("Immersion Suite")
+        base_path = getattr(sys, '_MEIPASS', os.path.join(os.path.dirname(__file__), ".."))
+        icon_path = os.path.join(base_path, "installer", "icon.ico")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(base_path, "icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.showMaximized()
 
         self.setup_menu()

@@ -1,11 +1,13 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QMainWindow, QProgressBar, QStackedWidget, QLabel)
 from PyQt6.QtCore import QUrl, Qt
-from PyQt6.QtGui import QColor, QShortcut, QKeySequence, QPainter, QPen, QPolygonF
+from PyQt6.QtGui import QColor, QShortcut, QKeySequence, QPainter, QPen, QPolygonF, QIcon
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from pathlib import Path
 import urllib.parse
+import sys
+import os
 
 
 class TabCloseButton(QWidget):
@@ -363,6 +365,11 @@ class BrowserWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Immersion Browser")
+        base_path = getattr(sys, '_MEIPASS', os.path.join(os.path.dirname(__file__), "..", ".."))
+        icon_path = os.path.join(base_path, "installer", "icon.ico")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(base_path, "icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.setStyleSheet("background-color: #242038;")
 
         central = QWidget()

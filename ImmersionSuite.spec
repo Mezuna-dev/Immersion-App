@@ -9,6 +9,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('web', 'web'),
+        ('installer/icon.ico', '.'),
     ],
     hiddenimports=[
         'zstandard',
