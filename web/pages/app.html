@@ -28,6 +28,7 @@
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('dashboard')">Dashboard</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('srs')">SRS</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('immersion')">Immersion</a>
+                        <a href="#" class="btn btn-dark dashboard-buttons" onclick="if(bridge) bridge.openBrowser()">Browser</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('settings')">Settings</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('about')">About</a>
                     </div>
@@ -658,10 +659,16 @@
                         <!-- MAL Search -->
                         <div class="card dash-card mb-4">
                             <div class="card-body text-white">
-                                <span class="dash-section-title">Anime Search</span>
-                                <div class="d-flex gap-2 mt-3">
-                                    <input type="text" class="form-control settings-input" id="mal-search-input" placeholder="Search anime title…" style="font-size: 0.9rem;" onkeydown="if(event.key==='Enter') animeSearch()">
-                                    <button class="btn btn-dark btn-accent btn-sm" onclick="animeSearch()" style="font-weight: 600; white-space: nowrap;">Search</button>
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="dash-section-title">Media Search</span>
+                                    <div class="d-flex gap-1" style="background:#1e1b2e; border-radius:6px; padding:2px;">
+                                        <button id="mal-toggle-anime" class="btn btn-sm" onclick="setMalSearchMode('anime')" style="font-size:0.8rem; font-weight:600; padding:0.2rem 0.75rem; border-radius:4px; background:#7c6af5; color:#fff; border:none;">Anime</button>
+                                        <button id="mal-toggle-manga" class="btn btn-sm" onclick="setMalSearchMode('manga')" style="font-size:0.8rem; font-weight:600; padding:0.2rem 0.75rem; border-radius:4px; background:transparent; color:#aaa; border:none;">Manga</button>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <input type="text" class="form-control settings-input" id="mal-search-input" placeholder="Search anime title…" style="font-size: 0.9rem;" onkeydown="if(event.key==='Enter') malSearch()">
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="malSearch()" style="font-weight: 600; white-space: nowrap;">Search</button>
                                 </div>
                                 <div id="mal-search-error" style="display: none; color: #e06c75; font-size: 0.82rem; margin-top: 0.5rem;"></div>
                                 <div id="mal-search-results" style="margin-top: 0.75rem;"></div>

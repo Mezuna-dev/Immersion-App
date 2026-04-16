@@ -2735,15 +2735,40 @@ function deleteMediaEntryFromModal(entryId) {
     });
 }
 
-// --- Anime Search (Jikan) ---
+// --- Anime / Manga Search (Jikan) ---
 
-function animeSearch() {
+var malSearchMode = 'anime';
+
+function setMalSearchMode(mode) {
+    malSearchMode = mode;
+    var animeBtn = document.getElementById('mal-toggle-anime');
+    var mangaBtn = document.getElementById('mal-toggle-manga');
+    if (animeBtn && mangaBtn) {
+        animeBtn.style.background = mode === 'anime' ? '#7c6af5' : 'transparent';
+        animeBtn.style.color = mode === 'anime' ? '#fff' : '#aaa';
+        mangaBtn.style.background = mode === 'manga' ? '#7c6af5' : 'transparent';
+        mangaBtn.style.color = mode === 'manga' ? '#fff' : '#aaa';
+    }
+    var input = document.getElementById('mal-search-input');
+    if (input) input.placeholder = mode === 'anime' ? 'Search anime title…' : 'Search manga title…';
+    document.getElementById('mal-search-results').innerHTML = '';
+    document.getElementById('mal-search-error').style.display = 'none';
+}
+
+function malSearch() {
     var query = document.getElementById('mal-search-input').value.trim();
     if (!query) return;
     document.getElementById('mal-search-results').innerHTML = '<p style="color:#888; font-size:0.85rem;">Searching…</p>';
     document.getElementById('mal-search-error').style.display = 'none';
-    if (bridge) bridge.searchAnime(query);
+    if (malSearchMode === 'manga') {
+        if (bridge) bridge.searchManga(query);
+    } else {
+        if (bridge) bridge.searchAnime(query);
+    }
 }
+
+// Keep backward-compat alias
+function animeSearch() { malSearch(); }
 
 var animeEpisodesCache = {};
 var animeDurationCache = {};
@@ -2909,6 +2934,101 @@ function selectAnime(animeId, title) {
     var animeCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'anime'; });
     if (animeCat) document.getElementById('media-entry-category').value = animeCat.id;
     fillDurationFields(animeId);
+    document.getElementById('mal-search-results').innerHTML = '';
+    document.getElementById('mal-search-input').value = '';
+}
+
+// --- Manga Search Results ---
+
+function updateMangaSearchResults(items, error) {
+    var errEl = document.getElementById('mal-search-error');
+    var resultsEl = document.getElementById('mal-search-results');
+    if (error) {
+        errEl.textContent = error;
+        errEl.style.display = '';
+        resultsEl.innerHTML = '';
+        return;
+    }
+    errEl.style.display = 'none';
+    if (!items.length) {
+        resultsEl.innerHTML = '<p style="color:#888; font-size:0.85rem;">No results found.</p>';
+        return;
+    }
+    var html = '<div class="d-flex flex-column gap-1">';
+    items.forEach(function(item) {
+        var displayTitle = item.title_english || item.title;
+        var typeLabel = item.type || '';
+        var chLabel = item.chapters ? item.chapters + ' ch' : '';
+        var volLabel = item.volumes ? item.volumes + ' vol' : '';
+        var scoreLabel = item.score ? '★ ' + Number(item.score).toFixed(2) : '';
+        var meta = [typeLabel, chLabel, volLabel, scoreLabel].filter(Boolean).join(' · ');
+        var img = item.image
+            ? '<img src="' + item.image + '" style="width:3rem; height:4.2rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
+            : '<div style="width:3rem; height:4.2rem; background:#1e1b2e; border-radius:4px; flex-shrink:0;"></div>';
+
+        var chToggle = item.chapters
+            ? '<button id="manga-ch-toggle-' + item.id + '" class="btn btn-dark btn-sm" onclick="toggleMangaList(\'ch\',' + item.id + ',' + item.chapters + ',' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; background:#3a3555 !important;">▼ Chapters</button>'
+            : '';
+        var volToggle = item.volumes
+            ? '<button id="manga-vol-toggle-' + item.id + '" class="btn btn-dark btn-sm" onclick="toggleMangaList(\'vol\',' + item.id + ',' + item.volumes + ',' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; background:#3a3555 !important;">▼ Volumes</button>'
+            : '';
+
+        html += '<div style="background:#1e1b2e; border-radius:6px; overflow:hidden;">'
+            + '<div class="d-flex align-items-center gap-2 p-2">'
+            + img
+            + '<div style="flex:1; min-width:0;">'
+            + '<div style="font-weight:600; font-size:0.9rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
+            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.75rem; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
+            + '<div style="font-size:0.75rem; color:#888; margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
+            + '</div>'
+            + chToggle
+            + volToggle
+            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectManga(' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap;">+ Add</button>'
+            + '</div>'
+            + '<div id="manga-ch-' + item.id + '" style="display:none;"></div>'
+            + '<div id="manga-vol-' + item.id + '" style="display:none;"></div>'
+            + '</div>';
+    });
+    html += '</div>';
+    resultsEl.innerHTML = html;
+}
+
+function toggleMangaList(kind, mangaId, total, seriesTitle) {
+    var container = document.getElementById('manga-' + kind + '-' + mangaId);
+    var btn = document.getElementById('manga-' + kind + '-toggle-' + mangaId);
+    if (!container) return;
+    var opening = container.style.display === 'none';
+    container.style.display = opening ? '' : 'none';
+    var label = kind === 'ch' ? 'Chapters' : 'Volumes';
+    if (btn) btn.textContent = (opening ? '▲ ' : '▼ ') + label;
+    if (opening && !container.dataset.rendered) {
+        container.dataset.rendered = '1';
+        var singular = kind === 'ch' ? 'Ch.' : 'Vol.';
+        var html = '<div style="border-top:1px solid #3a3555; max-height:16rem; overflow-y:auto;">';
+        for (var i = 1; i <= total; i++) {
+            html += '<div class="d-flex align-items-center gap-2" style="padding:0.35rem 0.75rem; border-bottom:1px solid #2d2a3e;">'
+                + '<span style="flex:1; font-size:0.82rem; color:#fff;">' + escapeHtml(singular + ' ' + i) + '</span>'
+                + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectMangaEntry(' + jsonAttr(seriesTitle) + ',' + jsonAttr(singular) + ',' + i + ')" style="font-size:0.68rem; padding:0.1rem 0.45rem; white-space:nowrap;">+ Add</button>'
+                + '</div>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    }
+}
+
+function selectMangaEntry(seriesTitle, singular, num) {
+    var title = seriesTitle + ' - ' + singular + ' ' + num;
+    showMediaEntryForm();
+    document.getElementById('media-entry-title').value = title;
+    var mangaCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'manga'; });
+    if (mangaCat) document.getElementById('media-entry-category').value = mangaCat.id;
+}
+
+function selectManga(title) {
+    showMediaEntryForm();
+    document.getElementById('media-entry-title').value = title;
+    var mangaCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'manga'; });
+    if (mangaCat) document.getElementById('media-entry-category').value = mangaCat.id;
     document.getElementById('mal-search-results').innerHTML = '';
     document.getElementById('mal-search-input').value = '';
 }

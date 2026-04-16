@@ -1,6 +1,6 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout
 import shutil
-from PyQt6.QtCore import QObject, pyqtSlot, QUrl
+from PyQt6.QtCore import QObject, pyqtSlot, QUrl, Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
@@ -596,7 +596,18 @@ class AppBridge(QObject):
         self.getMediaCategories()
         self.getMediaEntries()
 
-    # --- Anime Search (Jikan) ---
+    # --- Browser ---
+
+    @pyqtSlot()
+    def openBrowser(self):
+        from widgets.browser import BrowserWindow
+        window = BrowserWindow()
+        window.show()
+        if not hasattr(self, '_browser_windows'):
+            self._browser_windows = []
+        self._browser_windows.append(window)
+
+    # --- Anime / Manga Search (Jikan) ---
 
     @pyqtSlot(str)
     def searchAnime(self, query):
@@ -640,6 +651,50 @@ class AppBridge(QObject):
         except Exception as e:
             self.web_view.page().runJavaScript(
                 f'updateAnimeSearchResults([], {json.dumps(str(e))});'
+            )
+
+    @pyqtSlot(str)
+    def searchManga(self, query):
+        if not query.strip():
+            return
+        encoded = urllib.parse.quote(query.strip())
+        url = QUrl(f'https://api.jikan.moe/v4/manga?q={encoded}&limit=10&sfw=true')
+        request = QNetworkRequest(url)
+        reply = self.network_manager.get(request)
+        reply.finished.connect(lambda: self._on_manga_search_finished(reply))
+
+    def _on_manga_search_finished(self, reply):
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            err = reply.errorString()
+            self.web_view.page().runJavaScript(
+                f'updateMangaSearchResults([], {json.dumps("Search failed: " + err)});'
+            )
+            reply.deleteLater()
+            return
+        data = bytes(reply.readAll()).decode('utf-8')
+        reply.deleteLater()
+        try:
+            result = json.loads(data)
+            items = []
+            for entry in result.get('data', []):
+                images = entry.get('images', {})
+                jpg = images.get('jpg', {})
+                items.append({
+                    'id': entry.get('mal_id'),
+                    'title': entry.get('title', ''),
+                    'title_english': entry.get('title_english') or '',
+                    'image': jpg.get('image_url', ''),
+                    'chapters': entry.get('chapters'),
+                    'volumes': entry.get('volumes'),
+                    'type': entry.get('type', ''),
+                    'score': entry.get('score'),
+                })
+            self.web_view.page().runJavaScript(
+                f'updateMangaSearchResults({json.dumps(items)}, null);'
+            )
+        except Exception as e:
+            self.web_view.page().runJavaScript(
+                f'updateMangaSearchResults([], {json.dumps(str(e))});'
             )
 
     @pyqtSlot(int, int)
