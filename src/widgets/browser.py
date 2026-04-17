@@ -3,9 +3,11 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence, QPainter, QPen, QPolygonF, QIcon
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+from PyQt6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
+                                   QWebEngineScript)
 from pathlib import Path
 import urllib.parse
+import json
 import sys
 import os
 
@@ -344,11 +346,39 @@ class BrowserTab(QWebEngineView):
             "  padding-left: 8px;"
             "}"
         )
+
+        selected = self.page().selectedText().strip()
+        if selected:
+            menu.addSeparator()
+            lookup_action = menu.addAction("Look up in dictionary")
+            lookup_action.triggered.connect(lambda: self._lookup_selected(selected))
+
         menu.exec(event.globalPos())
+
+    def _lookup_selected(self, text: str) -> None:
+        """Trigger the overlay popup for *text* via the injected overlay script."""
+        self.page().runJavaScript(
+            f'window.__immersionLookup && window.__immersionLookup({json.dumps(text)});',
+            QWebEngineScript.ScriptWorldId.ApplicationWorld,
+        )
+
+
+def _load_overlay_js() -> str | None:
+    """Return the contents of web/dictionary/overlay.js, or None on error."""
+    try:
+        if getattr(sys, 'frozen', False):
+            base = Path(sys._MEIPASS)
+        else:
+            base = Path(__file__).resolve().parent.parent.parent
+        js_path = base / 'web' / 'dictionary' / 'overlay.js'
+        return js_path.read_text(encoding='utf-8')
+    except Exception:
+        return None
 
 
 class BrowserWindow(QMainWindow):
-    _profile = None  # shared persistent profile
+    _profile         = None   # shared persistent QWebEngineProfile
+    _dict_handler    = None   # DictionaryUrlSchemeHandler (keeps Python ref alive)
 
     @classmethod
     def _get_profile(cls):
@@ -360,6 +390,25 @@ class BrowserWindow(QMainWindow):
             cls._profile.setPersistentCookiesPolicy(
                 QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
             )
+
+            # ── Dictionary: URL scheme handler ────────────────────────────────
+            from dictionary.handler import DictionaryUrlSchemeHandler
+            cls._dict_handler = DictionaryUrlSchemeHandler(cls._profile)
+            cls._profile.installUrlSchemeHandler(b'immersion', cls._dict_handler)
+
+            # ── Dictionary: inject overlay.js into every tab page ─────────────
+            overlay_js = _load_overlay_js()
+            if overlay_js:
+                script = QWebEngineScript()
+                script.setName('immersion_dict_overlay')
+                script.setSourceCode(overlay_js)
+                script.setInjectionPoint(
+                    QWebEngineScript.InjectionPoint.DocumentReady)
+                script.setWorldId(
+                    QWebEngineScript.ScriptWorldId.ApplicationWorld)
+                script.setRunsOnSubFrames(False)
+                cls._profile.scripts().insert(script)
+
         return cls._profile
 
     def __init__(self):

@@ -1,3 +1,20 @@
+# Register custom URL schemes before any Qt Web Engine module is imported or
+# initialised.  Qt requires this to happen before QCoreApplication is created;
+# in Python the equivalent is module-level code that runs before main().
+from PyQt6.QtWebEngineCore import QWebEngineUrlScheme as _QWebEngineUrlScheme
+_scheme = _QWebEngineUrlScheme(b'immersion')
+_flags = (
+    _QWebEngineUrlScheme.Flag.SecureScheme |
+    _QWebEngineUrlScheme.Flag.CorsEnabled |
+    _QWebEngineUrlScheme.Flag.ContentSecurityPolicyIgnored
+)
+# FetchApiAllowed was added in Qt 6.4 — add it when available.
+if hasattr(_QWebEngineUrlScheme.Flag, 'FetchApiAllowed'):
+    _flags |= _QWebEngineUrlScheme.Flag.FetchApiAllowed
+_scheme.setFlags(_flags)
+_QWebEngineUrlScheme.registerScheme(_scheme)
+del _QWebEngineUrlScheme, _scheme, _flags
+
 from PyQt6.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QProgressDialog, QMessageBox
 from PyQt6.QtGui import QIcon
