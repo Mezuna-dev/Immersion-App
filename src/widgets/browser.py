@@ -302,13 +302,31 @@ class NavReloadButton(QWidget):
         p.end()
 
 
+class _LoudPage(QWebEnginePage):
+    """QWebEnginePage that mirrors JS console messages to Python stderr.
+
+    Used during Yomitan integration so missing chrome.* APIs fail visibly
+    instead of silently no-op'ing in the WebView console.
+    """
+
+    _LEVELS = {0: 'INFO', 1: 'WARN', 2: 'ERROR'}
+
+    def javaScriptConsoleMessage(self, level, message, line, source):
+        try:
+            key = level.value
+        except AttributeError:
+            key = int(level)
+        tag = self._LEVELS.get(key, str(level))
+        print(f'[webview {tag}] {source}:{line}  {message}', file=sys.stderr)
+
+
 class BrowserTab(QWebEngineView):
     """A single browser tab that handles new-window requests."""
 
     def __init__(self, profile, browser_window):
         super().__init__()
         self._browser_window = browser_window
-        page = QWebEnginePage(profile, self)
+        page = _LoudPage(profile, self)
         self.setPage(page)
 
     def createWindow(self, window_type):
@@ -363,17 +381,20 @@ class BrowserTab(QWebEngineView):
         )
 
 
-def _load_overlay_js() -> str | None:
-    """Return the contents of web/dictionary/overlay.js, or None on error."""
+def _load_web_js(filename: str) -> str | None:
+    """Return the contents of web/dictionary/<filename>, or None on error."""
     try:
         if getattr(sys, 'frozen', False):
             base = Path(sys._MEIPASS)
         else:
             base = Path(__file__).resolve().parent.parent.parent
-        js_path = base / 'web' / 'dictionary' / 'overlay.js'
-        return js_path.read_text(encoding='utf-8')
+        return (base / 'web' / 'dictionary' / filename).read_text(encoding='utf-8')
     except Exception:
         return None
+
+
+def _load_overlay_js() -> str | None:
+    return _load_web_js('overlay.js')
 
 
 class BrowserWindow(QMainWindow):
@@ -408,6 +429,96 @@ class BrowserWindow(QMainWindow):
                     QWebEngineScript.ScriptWorldId.ApplicationWorld)
                 script.setRunsOnSubFrames(False)
                 cls._profile.scripts().insert(script)
+
+            # ── Yomitan shim: inline in EVERY frame at DocumentCreation ──────
+            # Must run before page scripts — in particular before the popup
+            # iframe's popup.html executes popup-main.js, so its chrome
+            # object is in place. Subframes forward sendMessage to the top
+            # frame (hub) via postMessage; see yomitan-shim.js for the wire
+            # protocol.
+            # Runs in MainWorld so dynamically-injected <script src="..."> tags
+            # (which execute in the page's main world) share the same
+            # window.chrome and window.__immersionYomitan. Overlay.js stays in
+            # ApplicationWorld — different concern, no globals shared with it.
+            shim_js = _load_web_js('yomitan-shim.js')
+            if shim_js:
+                shim_script = QWebEngineScript()
+                shim_script.setName('immersion_yomitan_shim')
+                shim_script.setSourceCode(shim_js)
+                shim_script.setInjectionPoint(
+                    QWebEngineScript.InjectionPoint.DocumentCreation)
+                shim_script.setWorldId(
+                    QWebEngineScript.ScriptWorldId.MainWorld)
+                shim_script.setRunsOnSubFrames(True)
+                cls._profile.scripts().insert(shim_script)
+            else:
+                print('[yomitan] failed to load yomitan-shim.js', file=sys.stderr)
+
+            # ── Yomitan backend iframe + content-script: TOP FRAME ONLY ─────
+            # The DictionaryDatabase spins up a module Worker with URL
+            # /js/dictionary/dictionary-database-worker-main.js — that resolves
+            # against whatever origin the backend is running in. Running it
+            # inside the page's own origin (google.com/youtube.com/…) makes
+            # the Worker 404 and the translator handshake time out.
+            #
+            # Fix: host the backend inside a hidden iframe whose origin IS
+            # immersion://yomitan/ so the Worker URL resolves to real files.
+            # The shim detects the backend URL and switches to "backend mode"
+            # (owns the handler registry + DictionaryDatabase). This top-frame
+            # shim becomes a pure router that forwards RPC to the iframe and
+            # fans broadcasts back out.
+            #
+            # Ordering:
+            #   1. Create the iframe and grab its contentWindow synchronously.
+            #   2. Register it with the top-frame shim BEFORE any message
+            #      from the iframe can arrive (postMessage is async, so any
+            #      post runs on a later event-loop turn — safe).
+            #   3. When yomitan-backend.js finishes its TLA (DB import +
+            #      Translator prepared), it posts immersion-backend-ready.
+            #      Only THEN do we load content-script-main.js; earlier would
+            #      race Frontend.prepare → optionsGet → undefined.
+            yomitan_bootstrap = (
+                "(() => {"
+                "  if (window !== window.top) return;"
+                "  const host = document.documentElement;"
+                "  const iframe = document.createElement('iframe');"
+                "  iframe.src = 'immersion://yomitan/immersion/backend.html';"
+                "  iframe.setAttribute('aria-hidden', 'true');"
+                "  iframe.style.display = 'none';"
+                "  iframe.style.width = '0';"
+                "  iframe.style.height = '0';"
+                "  iframe.style.border = '0';"
+                "  iframe.onerror = (e) => console.error('[yomitan] backend iframe error', e && e.type);"
+                "  host.appendChild(iframe);"
+                "  try {"
+                "    window.__immersionYomitan.setBackendFrame(iframe.contentWindow);"
+                "  } catch (e) {"
+                "    console.error('[yomitan] setBackendFrame failed', e && e.message);"
+                "  }"
+                "  window.addEventListener('message', function onReady(ev) {"
+                "    if (ev.source !== iframe.contentWindow) return;"
+                "    const d = ev.data;"
+                "    if (!d || typeof d !== 'object' || d.type !== 'immersion-backend-ready') return;"
+                "    window.removeEventListener('message', onReady);"
+                "    console.error('[yomitan] backend ready; loading content-script');"
+                "    const mod = document.createElement('script');"
+                "    mod.type = 'module';"
+                "    mod.src = 'immersion://yomitan/js/app/content-script-main.js';"
+                "    mod.onerror = (e) => console.error('[yomitan] content-script load error', e && e.type);"
+                "    mod.onload = () => console.error('[yomitan] content-script <script onload> fired');"
+                "    (document.head || document.documentElement).appendChild(mod);"
+                "  });"
+                "})();"
+            )
+            ym_script = QWebEngineScript()
+            ym_script.setName('immersion_yomitan_bootstrap')
+            ym_script.setSourceCode(yomitan_bootstrap)
+            ym_script.setInjectionPoint(
+                QWebEngineScript.InjectionPoint.DocumentReady)
+            ym_script.setWorldId(
+                QWebEngineScript.ScriptWorldId.MainWorld)
+            ym_script.setRunsOnSubFrames(False)
+            cls._profile.scripts().insert(ym_script)
 
         return cls._profile
 

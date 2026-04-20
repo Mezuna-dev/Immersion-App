@@ -18,9 +18,10 @@
   window.__immDictLoaded = true;
 
   // ── Constants ──────────────────────────────────────────────────────────────
-  const LOOKUP_URL   = 'immersion://dict/lookup?text=';
-  const SCAN_LEN     = 25;   // max characters extracted from the cursor position
-  const DEBOUNCE_MS  = 80;   // ms to wait after last mousemove before querying
+  const LOOKUP_URL    = 'immersion://dict/lookup?text=';
+  const SCAN_LEN      = 25;   // max characters extracted from the cursor position
+  const DEBOUNCE_MS   = 16;   // ~one frame — feels instant while still coalescing mousemoves
+  const CACHE_MAX     = 512;  // JS-side LRU for lookup results
 
   // ── State ──────────────────────────────────────────────────────────────────
   let shadowHost  = null;
@@ -31,6 +32,9 @@
   let currentAbort   = null;
   let popupHovered   = false;
   let shiftHeld      = false;
+  let lastChunk     = null;     // chunk shown in the popup right now
+  let lastShownKey  = null;     // identity of rendered HTML (data.matched+reason)
+  const _lookupCache = new Map(); // chunk → data (or null for no-match)
 
   // Highlight state
   let _hlSheet = null;   // CSSStyleSheet for ::highlight rule
@@ -95,7 +99,27 @@
     }
 
     const textNode = range.startContainer;
-    const offset   = range.startOffset;
+    let   offset   = range.startOffset;
+
+    // caretRangeFromPoint places the caret *between* glyphs, so when the
+    // cursor sits visually over a character the returned offset sometimes
+    // points just past it (between that char and the next).  Probe the
+    // previous character's box: if the cursor is inside it, step offset
+    // back by one so the popup anchors to the glyph the user is pointing
+    // at, and the chunk starts at the right character.
+    if (offset > 0) {
+      try {
+        const probe = document.createRange();
+        probe.setStart(textNode, offset - 1);
+        probe.setEnd(textNode, offset);
+        const pr = probe.getBoundingClientRect();
+        if (pr.width > 0 && pr.height > 0 &&
+            x >= pr.left && x <= pr.right &&
+            y >= pr.top  && y <= pr.bottom) {
+          offset -= 1;
+        }
+      } catch (_) {}
+    }
 
     // Get text from the current node, then walk forward if we need more.
     let chunk = textNode.textContent.slice(offset, offset + SCAN_LEN);
@@ -379,7 +403,7 @@
     #popup {
       position: fixed;
       width: 440px;
-      max-height: 520px;
+      max-height: 320px;
       background: #1a1726;
       border: 1px solid rgba(120, 100, 180, 0.18);
       border-radius: 14px;
@@ -397,7 +421,7 @@
 
     /* ── Scrollable entry list ─────────────────────────────────── */
     .list {
-      max-height: 520px;
+      max-height: 320px;
       overflow-y: auto;
     }
 
@@ -758,26 +782,51 @@
   function showPopup(data, x, y, textNode, offset) {
     ensurePopup();
 
-    const html = renderEntries(data);
-    if (!html) { hidePopup(); return; }
+    // Identity of this rendering — if unchanged, skip the innerHTML rebuild
+    // entirely and only reposition.
+    const renderKey = (data.matched || '') + '|' + (data.reason || '');
+    const wasHidden = popupEl.style.display === 'none';
 
-    // Highlight the matched word in the page
+    if (renderKey !== lastShownKey || wasHidden) {
+      const html = renderEntries(data);
+      if (!html) { hidePopup(); return; }
+
+      // Render off-screen first when going from hidden → visible so we can
+      // measure the real height without a one-frame flash at stale coords.
+      if (wasHidden) {
+        popupEl.style.left = '-9999px';
+        popupEl.style.top  = '-9999px';
+      }
+      popupEl.innerHTML = html;
+      lastShownKey = renderKey;
+    }
+
+    // Highlight the matched word in the page.
     if (data.matched && textNode != null && offset != null) {
       applyHighlight(textNode, offset, data.matched.length);
     }
 
-    popupEl.innerHTML = html;
     popupEl.style.display = 'block';
     shadowHost.style.pointerEvents = 'auto';
 
-    // Position the popup directly below (or above) the hovered text line.
-    // We use a single-character Range at the cursor offset to get the line's
-    // bounding rect — more reliable than spanning the full matched word, which
-    // can have irregular rects on flex/grid layouts or near line-breaks.
-    const W = 440, H = 520, GAP = 8, MARGIN = 10;
+    positionPopup(x, y, textNode, offset);
+  }
+
+  // Position the popup relative to the character at (textNode, offset).
+  // Uses the popup's *measured* size so the above/below decision reflects
+  // the actual content height, not the max-height from CSS.
+  function positionPopup(x, y, textNode, offset) {
+    if (!popupEl || popupEl.style.display === 'none') return;
+
+    const GAP = 8, MARGIN = 10;
+    const popupRect = popupEl.getBoundingClientRect();
+    const W = popupRect.width  || 440;
+    const H = popupRect.height || 200;
+
+    // Anchor to the character at the cursor's offset.
     let lineBottom = y + 20;  // fallback: cursor y + small offset
     let lineTop    = y;
-    let anchorLeft = x;       // fallback: cursor x
+    let anchorLeft = x;
 
     if (textNode != null && offset != null) {
       try {
@@ -786,8 +835,7 @@
         r.setStart(textNode, offset);
         r.setEnd(textNode, safeEnd);
         const rect = r.getBoundingClientRect();
-        // Only trust the rect if it has non-zero size and is on-screen.
-        if (rect.height > 0 && rect.bottom > 0 && rect.bottom < window.innerHeight + 200) {
+        if (rect.height > 0) {
           lineBottom = rect.bottom;
           lineTop    = rect.top;
           anchorLeft = rect.left;
@@ -795,23 +843,30 @@
       } catch (_) {}
     }
 
-    // Horizontal: anchor to the word's left edge, clamped so popup stays on screen.
+    // Horizontal: anchor to the character's left edge, clamped on-screen.
     let left = anchorLeft;
     if (left + W > window.innerWidth - MARGIN) left = window.innerWidth - W - MARGIN;
     if (left < MARGIN) left = MARGIN;
 
-    // Vertical: prefer below the text line; flip above only when there's
-    // actually enough room there and not enough below.
-    const spaceBelow = window.innerHeight - lineBottom - MARGIN;
-    const spaceAbove = lineTop - MARGIN;
+    // Vertical: prefer below when the real popup height fits there; flip above
+    // only when it genuinely fits above and doesn't below; otherwise pick the
+    // side with more room.
+    const spaceBelow = window.innerHeight - lineBottom - GAP - MARGIN;
+    const spaceAbove = lineTop - GAP - MARGIN;
     let top;
-    if (spaceBelow >= H || spaceBelow >= spaceAbove) {
+    if (H <= spaceBelow) {
+      top = lineBottom + GAP;
+    } else if (H <= spaceAbove) {
+      top = lineTop - H - GAP;
+    } else if (spaceBelow >= spaceAbove) {
       top = lineBottom + GAP;
     } else {
       top = lineTop - H - GAP;
     }
     if (top < MARGIN) top = MARGIN;
-    if (top + H > window.innerHeight - MARGIN) top = window.innerHeight - H - MARGIN;
+    if (top + H > window.innerHeight - MARGIN) {
+      top = Math.max(MARGIN, window.innerHeight - H - MARGIN);
+    }
 
     popupEl.style.left = left + 'px';
     popupEl.style.top  = top  + 'px';
@@ -826,16 +881,53 @@
     if (popupEl)     popupEl.style.display = 'none';
     if (shadowHost)  shadowHost.style.pointerEvents = 'none';
     popupHovered = false;
+    lastChunk    = null;
+    lastShownKey = null;
     clearHighlight();
+  }
+
+  // ── Lookup cache (JS-side) ────────────────────────────────────────────────
+  function _cacheGet(key) {
+    if (!_lookupCache.has(key)) return undefined;
+    const v = _lookupCache.get(key);
+    // Refresh recency (Map iteration order = insertion order).
+    _lookupCache.delete(key);
+    _lookupCache.set(key, v);
+    return v;
+  }
+  function _cachePut(key, value) {
+    _lookupCache.set(key, value);
+    if (_lookupCache.size > CACHE_MAX) {
+      const firstKey = _lookupCache.keys().next().value;
+      _lookupCache.delete(firstKey);
+    }
   }
 
   // ── Core lookup ────────────────────────────────────────────────────────────
   async function doLookup(text, x, y, textNode, offset) {
+    // JS-side cache — avoids the IPC round-trip entirely on repeat hovers.
+    const cached = _cacheGet(text);
+    if (cached !== undefined) {
+      if (cached && cached.entries && cached.entries.length) {
+        showPopup(cached, x, y, textNode, offset);
+      } else if (!popupHovered) {
+        hidePopup();
+      }
+      return;
+    }
+
     if (currentAbort) currentAbort.abort();
     currentAbort = new AbortController();
+    const thisAbort = currentAbort;
     try {
-      const data = await fetchLookup(text, currentAbort.signal);
-      if (data) showPopup(data, x, y, textNode, offset);
+      const data = await fetchLookup(text, thisAbort.signal);
+      if (thisAbort.signal.aborted) return;
+      _cachePut(text, data || null);
+      if (data && data.entries && data.entries.length) {
+        showPopup(data, x, y, textNode, offset);
+      } else if (!popupHovered) {
+        hidePopup();
+      }
     } catch (e) {
       if (e.name !== 'AbortError') {
         // Silently swallow network errors (dict may not be installed yet).
@@ -857,14 +949,24 @@
       return;
     }
 
+    const x = e.clientX, y = e.clientY;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      const hit = getChunkAtPoint(e.clientX, e.clientY);
+      const hit = getChunkAtPoint(x, y);
       if (!hit) {
+        lastChunk = null;
         if (!popupHovered) hidePopup();
         return;
       }
-      doLookup(hit.chunk, e.clientX, e.clientY, hit.textNode, hit.offset);
+      // Same chunk as currently displayed: skip the lookup and re-render,
+      // but still reposition so the popup follows the cursor across the
+      // word (Yomitan-style).
+      if (hit.chunk === lastChunk && popupEl && popupEl.style.display !== 'none') {
+        positionPopup(x, y, hit.textNode, hit.offset);
+        return;
+      }
+      lastChunk = hit.chunk;
+      doLookup(hit.chunk, x, y, hit.textNode, hit.offset);
     }, DEBOUNCE_MS);
   });
 

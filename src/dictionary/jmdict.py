@@ -2,6 +2,8 @@ import sqlite3
 import json
 import sys
 import os
+import threading
+from collections import OrderedDict
 from pathlib import Path
 from .base import DictionaryModule
 from .deinflect import deinflect
@@ -20,8 +22,11 @@ else:
 
 DB_PATH: Path = _BASE_DIR / 'data' / 'dicts' / 'jmdict.sqlite'
 
-# Maximum characters to scan from the cursor position when looking for a match.
 _MAX_SCAN_LEN = 20
+_CACHE_SIZE   = 256
+
+_COLS = ("e.kanji_json, e.reading_json, e.meanings_json, "
+         "COALESCE(e.tags_json, '[]') AS tags_json")
 
 
 class JMdictModule(DictionaryModule):
@@ -31,6 +36,11 @@ class JMdictModule(DictionaryModule):
     If the file is missing, ``is_available`` returns False and lookups
     return an empty result rather than raising.
     """
+
+    def __init__(self):
+        self._con: sqlite3.Connection | None = None
+        self._lock = threading.Lock()
+        self._cache: OrderedDict[str, dict] = OrderedDict()
 
     @property
     def name(self) -> str:
@@ -44,36 +54,59 @@ class JMdictModule(DictionaryModule):
     def is_available(self) -> bool:
         return DB_PATH.exists()
 
-    def lookup_text(self, text: str) -> dict:
-        """Longest-match scan with deinflection support."""
-        text = _trim_to_japanese(text)
-        if not text or not DB_PATH.exists():
-            return {'matched': None, 'entries': []}
-
+    def _get_con(self) -> sqlite3.Connection | None:
+        if self._con is not None:
+            return self._con
+        if not DB_PATH.exists():
+            return None
         try:
             con = sqlite3.connect(str(DB_PATH), check_same_thread=False)
             con.row_factory = sqlite3.Row
+            self._con = con
+            return con
         except sqlite3.Error:
+            return None
+
+    def lookup_text(self, text: str) -> dict:
+        """Longest-match scan with deinflection support."""
+        text = _trim_to_japanese(text)
+        if not text:
             return {'matched': None, 'entries': []}
 
-        try:
-            for length in range(min(len(text), _MAX_SCAN_LEN), 0, -1):
-                word = text[:length]
+        cached = self._cache.get(text)
+        if cached is not None:
+            self._cache.move_to_end(text)
+            return cached
 
-                entries = _query(word, con)
-                if entries:
-                    return {'matched': word, 'entries': entries}
+        with self._lock:
+            cached = self._cache.get(text)
+            if cached is not None:
+                self._cache.move_to_end(text)
+                return cached
 
-                for candidate in deinflect(word):
-                    entries = _query(candidate['word'], con)
-                    if entries:
-                        return {
-                            'matched': word,
-                            'entries': entries,
-                            'reason': candidate['reason'],
-                        }
-        finally:
-            con.close()
+            result = self._do_lookup(text)
+            self._cache[text] = result
+            if len(self._cache) > _CACHE_SIZE:
+                self._cache.popitem(last=False)
+            return result
+
+    def _do_lookup(self, text: str) -> dict:
+        con = self._get_con()
+        if con is None:
+            return {'matched': None, 'entries': []}
+
+        for length in range(min(len(text), _MAX_SCAN_LEN), 0, -1):
+            word = text[:length]
+            candidates = [(word, None)]
+            for c in deinflect(word):
+                candidates.append((c['word'], c['reason']))
+
+            matched_reason, entries = _query_batch(candidates, con)
+            if entries:
+                result = {'matched': word, 'entries': entries}
+                if matched_reason:
+                    result['reason'] = matched_reason
+                return result
 
         return {'matched': None, 'entries': []}
 
@@ -98,34 +131,75 @@ def _trim_to_japanese(text: str) -> str:
     return ''
 
 
-def _query(word: str, con: sqlite3.Connection) -> list[dict]:
-    """Return entries matching *word* using an existing connection."""
+def _query_batch(
+    candidates: list[tuple[str, str | None]],
+    con: sqlite3.Connection,
+) -> tuple[str | None, list[dict]]:
+    """Look up every candidate form in a single SQL statement.
+
+    Candidates are ordered by priority (exact match first, deinflections after).
+    The winning candidate is the highest-priority one that returned any rows.
+    Returns (reason_for_winner, entries). reason is None for exact matches.
+    """
+    if not candidates:
+        return None, []
+
+    words = [w for w, _ in candidates]
+    placeholders = ','.join('?' * len(words))
     try:
         cur = con.cursor()
-        cur.execute("""
-            SELECT DISTINCT e.kanji_json, e.reading_json, e.meanings_json,
-                   COALESCE(e.tags_json, '[]') AS tags_json
-            FROM entry e
-            JOIN kanji_form k ON k.entry_id = e.id
-            WHERE k.kanji = ?
-            LIMIT 8
-        """, (word,))
+        cur.execute(
+            f"""
+            SELECT e.id AS entry_id, k.kanji AS matched_word, {_COLS}
+            FROM entry e JOIN kanji_form k ON k.entry_id = e.id
+            WHERE k.kanji IN ({placeholders})
+            UNION
+            SELECT e.id AS entry_id, r.reading AS matched_word, {_COLS}
+            FROM entry e JOIN reading_form r ON r.entry_id = e.id
+            WHERE r.reading IN ({placeholders})
+            ORDER BY entry_id
+            LIMIT 64
+            """,
+            words + words,
+        )
         rows = cur.fetchall()
-
-        if not rows:
-            cur.execute("""
-                SELECT DISTINCT e.kanji_json, e.reading_json, e.meanings_json,
-                       COALESCE(e.tags_json, '[]') AS tags_json
-                FROM entry e
-                JOIN reading_form r ON r.entry_id = e.id
-                WHERE r.reading = ?
-                LIMIT 8
-            """, (word,))
-            rows = cur.fetchall()
     except sqlite3.Error:
-        return []
+        return None, []
 
-    results = []
+    if not rows:
+        return None, []
+
+    priority = {w: i for i, (w, _) in enumerate(candidates)}
+    best_idx = len(candidates)
+    best_word: str | None = None
+    for row in rows:
+        w = row['matched_word']
+        idx = priority.get(w, len(candidates))
+        if idx < best_idx:
+            best_idx = idx
+            best_word = w
+            if idx == 0:
+                break
+
+    if best_word is None:
+        return None, []
+
+    winning_rows = [r for r in rows if r['matched_word'] == best_word]
+    reason = candidates[best_idx][1]
+    return reason, _rank_entries(_parse_rows(winning_rows))
+
+
+def _entry_score(entry: dict) -> int:
+    tags_lo = [t.lower() for t in (entry.get('tags') or [])]
+    return 1 if 'common' in tags_lo else 0
+
+
+def _rank_entries(entries: list[dict]) -> list[dict]:
+    return sorted(entries, key=_entry_score, reverse=True)
+
+
+def _parse_rows(rows) -> list[dict]:
+    results: list[dict] = []
     for row in rows:
         try:
             results.append({
@@ -136,5 +210,4 @@ def _query(word: str, con: sqlite3.Connection) -> list[dict]:
             })
         except (json.JSONDecodeError, IndexError):
             pass
-
-    return results
+    return results[:8]

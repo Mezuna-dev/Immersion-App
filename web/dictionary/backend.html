@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!--
+  Hidden backend iframe for Yomitan.
+
+  Served at  immersion://yomitan/immersion/backend.html  so its origin
+  matches  immersion://yomitan/js/dictionary/dictionary-database-worker-main.js
+  — without same-origin, the module Worker that DictionaryDatabase spins up
+  can't load.
+
+  yomitan-shim.js is auto-injected into every frame at DocumentCreation and
+  switches to "backend mode" when it sees this URL; it registers handlers
+  locally and services RPC from the parent tab. yomitan-backend.js imports
+  Yomitan's real DictionaryDatabase/Translator and wires them to those
+  handlers.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Immersion-Yomitan backend</title>
+</head>
+<body>
+<script type="module"
+        src="immersion://yomitan/immersion/yomitan-backend.js"></script>
+</body>
+</html>
