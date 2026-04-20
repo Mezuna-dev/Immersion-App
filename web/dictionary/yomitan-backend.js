@@ -22,6 +22,7 @@ import {OptionsUtil} from 'immersion://yomitan/js/data/options-util.js';
 import {DictionaryDatabase} from 'immersion://yomitan/js/dictionary/dictionary-database.js';
 import {DictionaryImporter} from 'immersion://yomitan/js/dictionary/dictionary-importer.js';
 import {DictionaryImporterMediaLoader} from 'immersion://yomitan/js/dictionary/dictionary-importer-media-loader.js';
+import {getLanguageSummaries} from 'immersion://yomitan/js/language/languages.js';
 import {Translator} from 'immersion://yomitan/js/language/translator.js';
 
 const api = window.__immersionYomitan;
@@ -57,6 +58,21 @@ api.registerHandler('getDictionaryInfo', async () => dictionarySummaries);
 api.registerHandler('getDefaultAnkiFieldTemplates', async () => '');
 api.registerHandler('isAnkiConnected', async () => false);
 api.registerHandler('getZoom', async () => ({zoomFactor: 1}));
+api.registerHandler('getLanguageSummaries', async () => getLanguageSummaries());
+
+// FrameClient/FrameEndpoint handshake: popup posts frameEndpointConnect
+// to TOP via window.parent.postMessage; TOP receives it through chrome
+// runtime.onMessage and replies via this RPC. We re-broadcast the
+// message to all listeners — FrameClient filters by secret/token, so
+// stray dispatches are harmless. message.frameId in the envelope tells
+// FrameClient which frameId is connecting (1 = popup, the only frame
+// that calls sendMessageToFrame in our setup).
+api.registerHandler('sendMessageToFrame', async (params) => {
+    const {message} = params || {};
+    if (!message) { return false; }
+    api.broadcast({...message, frameId: 1});
+    return true;
+});
 api.registerHandler('getStylesheetContent', async (params) => {
     const {url} = params || {};
     if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')

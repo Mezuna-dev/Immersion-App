@@ -224,15 +224,28 @@
         const inFlightFromChild = new Map();  // forwardedId → {sourceWin, childId}
         let nextForwardId = 0;
 
+        // Tracks every child window we've ever received an immersion-rpc
+        // from. window.frames only enumerates iframes in the *document tree*
+        // — popup iframes attached inside a Shadow DOM (Yomitan's default)
+        // are invisible to it. Recording sources from RPCs covers any iframe
+        // that has actively reached out to us, regardless of where it lives.
+        const knownChildren = new Set();
+
         const postToChildren = (message, except) => {
-            for (let i = 0; i < window.frames.length; i++) {
-                const child = window.frames[i];
+            let posted = 0;
+            const stale = [];
+            for (const child of knownChildren) {
                 if (child === except || child === backendWin) continue;
                 try {
                     child.postMessage(
                         {type: 'immersion-broadcast', message}, '*');
-                } catch (_) { /* cross-origin or gone */ }
+                    posted++;
+                } catch (_) { stale.push(child); }
             }
+            for (const c of stale) knownChildren.delete(c);
+            console.error('[yomitan-shim:top] postToChildren: '
+                + 'known=' + knownChildren.size + ' posted=' + posted
+                + ' action=' + (message && message.action));
         };
 
         window.addEventListener('message', (ev) => {
@@ -300,8 +313,12 @@
             // ── From child frame: forward RPC to backend ────────────────
             if (d.type !== 'immersion-rpc') return;
             if (!ev.source) return;
+            if (ev.source !== backendWin) {
+                knownChildren.add(ev.source);
+            }
             const action = d.message && d.message.action;
-            console.error('[yomitan-shim:top] child RPC action=' + action);
+            console.error('[yomitan-shim:top] child RPC action=' + action
+                + ' knownChildren=' + knownChildren.size);
             (async () => {
                 await backendShimReady;
                 if (!backendWin) return;
@@ -381,6 +398,12 @@
             if (ev.source !== window.parent) return;
             const d = ev.data;
             if (!d || typeof d !== 'object') return;
+            if (typeof d.type === 'string' && d.type.startsWith('immersion-')) {
+                console.error('[yomitan-shim:subframe] recv type=' + d.type
+                    + (d.message && d.message.action
+                        ? ' action=' + d.message.action : '')
+                    + ' @ ' + window.location.href);
+            }
             if (d.type === 'immersion-rpc-reply') {
                 const slot = pending.get(d.id);
                 if (!slot) return;
