@@ -1,3 +1,4 @@
 PyQt6
 zstandard
 PyQt6-WebEngine
+websockets>=12.0

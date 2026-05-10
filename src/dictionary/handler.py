@@ -28,10 +28,6 @@ def _project_base() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _yomitan_ext_root() -> Path:
-    return (_project_base() / 'vendor' / 'yomitan' / 'ext').resolve()
-
-
 def _web_root() -> Path:
     return (_project_base() / 'web').resolve()
 
@@ -66,18 +62,11 @@ _MIME_BY_SUFFIX = {
 
 
 class DictionaryUrlSchemeHandler(QWebEngineUrlSchemeHandler):
-    """Serves five routes on the  immersion://  scheme:
+    """Serves routes on the  immersion://  scheme:
 
-      immersion:///lookup?text=...                → JSON dictionary lookup.
-      immersion://yomitan/immersion/<path>        → static file from web/dictionary/.
-      immersion://yomitan/<path>                  → static file from vendor/yomitan/ext/.
-      immersion://app/<path>                      → static file from web/ (probe etc.).
-      immersion://data/<path>                     → static file from data/dicts/ (ZIPs).
-
-    The  immersion://yomitan/immersion/  prefix lets us serve our own files
-    (backend iframe, future trusted-frame assets) under the  yomitan  host so
-    they share an origin with Yomitan's own modules — same-origin is required
-    for  new Worker('/js/dictionary/...', {type: 'module'})  to load.
+      immersion:///lookup?text=...  → JSON dictionary lookup.
+      immersion://app/<path>        → static file from web/.
+      immersion://data/<path>       → static file from data/dicts/ (ZIPs).
 
     Installed once on the shared QWebEngineProfile so every tab can reach it.
     """
@@ -85,9 +74,7 @@ class DictionaryUrlSchemeHandler(QWebEngineUrlSchemeHandler):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._dict = get_dict_module()
-        self._yomitan_root = _yomitan_ext_root()
         self._web_root = _web_root()
-        self._web_dict_root = (_web_root() / 'dictionary').resolve()
         self._data_root = _data_dicts_root()
 
     def requestStarted(self, job: QWebEngineUrlRequestJob) -> None:
@@ -99,11 +86,6 @@ class DictionaryUrlSchemeHandler(QWebEngineUrlSchemeHandler):
             self._serve_lookup(job, url)
         elif host == '' and path == '/dict-zips':
             self._serve_dict_zips(job)
-        elif host == 'yomitan' and path.startswith('/immersion/'):
-            self._serve_static(job, url, self._web_dict_root,
-                               strip_prefix='/immersion/')
-        elif host == 'yomitan':
-            self._serve_static(job, url, self._yomitan_root)
         elif host == 'app':
             self._serve_static(job, url, self._web_root)
         elif host == 'data':

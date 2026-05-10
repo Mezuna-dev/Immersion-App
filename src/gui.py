@@ -97,6 +97,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    import ws_server
+    ws_server.start()
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
