@@ -596,17 +596,6 @@ class AppBridge(QObject):
         self.getMediaCategories()
         self.getMediaEntries()
 
-    # --- Browser ---
-
-    @pyqtSlot()
-    def openBrowser(self):
-        from widgets.browser import BrowserWindow
-        window = BrowserWindow()
-        window.show()
-        if not hasattr(self, '_browser_windows'):
-            self._browser_windows = []
-        self._browser_windows.append(window)
-
     # --- Anime / Manga Search (Jikan) ---
 
     @pyqtSlot(str)

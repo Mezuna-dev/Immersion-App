@@ -459,6 +459,8 @@ def _parse_entry_tags(def_tags: str, term_tags: str, score: int) -> list[str]:
 _SCHEMA = """
 CREATE TABLE entry (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    score         INTEGER NOT NULL DEFAULT 0,
+    seq           INTEGER NOT NULL DEFAULT 0,
     kanji_json    TEXT NOT NULL DEFAULT '[]',
     reading_json  TEXT NOT NULL DEFAULT '[]',
     meanings_json TEXT NOT NULL DEFAULT '[]',
@@ -518,8 +520,8 @@ def _build_sqlite(zf: zipfile.ZipFile, db_path: Path) -> None:
 
     def flush():
         con.executemany(
-            'INSERT INTO entry(kanji_json,reading_json,meanings_json,tags_json,forms_json)'
-            ' VALUES(?,?,?,?,?)',
+            'INSERT INTO entry(score,seq,kanji_json,reading_json,meanings_json,tags_json,forms_json)'
+            ' VALUES(?,?,?,?,?,?,?)',
             batch_e,
         )
         # Get the ids of the rows we just inserted
@@ -550,6 +552,7 @@ def _build_sqlite(zf: zipfile.ZipFile, db_path: Path) -> None:
             def_tags    = row[2] or ''
             score       = row[4] if len(row) > 4 and isinstance(row[4], (int, float)) else 0
             definitions = row[5] if isinstance(row[5], list) else []
+            sequence    = row[6] if len(row) > 6 and isinstance(row[6], int) else 0
             term_tags   = row[7] if len(row) > 7 and isinstance(row[7], str) else ''
 
             if not term:
@@ -567,6 +570,8 @@ def _build_sqlite(zf: zipfile.ZipFile, db_path: Path) -> None:
             forms = _extract_entry_forms(definitions)
 
             batch_e.append((
+                int(score),
+                sequence,
                 json.dumps(kanji_forms,   ensure_ascii=False),
                 json.dumps(reading_forms, ensure_ascii=False),
                 json.dumps(senses,        ensure_ascii=False),

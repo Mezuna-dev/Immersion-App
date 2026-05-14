@@ -308,6 +308,7 @@ function populateRetentionDeckSelect() {
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
+    syncCustomSelect('retention-deck-select');
 }
 
 function fetchRetentionStats() {
@@ -319,22 +320,46 @@ function fetchRetentionStats() {
 }
 
 function updateRetentionStats(stats) {
-    function fmtEl(elId, countId, s) {
+    var CIRC = 188.5;
+    function fmtEl(elId, ringId, countId, s) {
         var el = document.getElementById(elId);
+        var ring = document.getElementById(ringId);
         var countEl = document.getElementById(countId);
         if (!s || s.rate === null || s.rate === undefined) {
             el.textContent = '—';
             el.style.color = '';
+            if (ring) ring.style.strokeDashoffset = CIRC;
             if (countEl) countEl.textContent = '';
             return;
         }
         el.textContent = s.rate + '%';
-        el.style.color = s.rate >= 90 ? '#27ae60' : s.rate >= 70 ? '#f39c12' : '#e74c3c';
+        var col = s.rate >= 90 ? '#22c55e' : s.rate >= 70 ? '#f59e0b' : '#ef4444';
+        el.style.color = col;
+        if (ring) {
+            ring.style.strokeDashoffset = CIRC * (1 - s.rate / 100);
+            ring.style.stroke = col;
+        }
         if (countEl) countEl.textContent = s.successful + ' / ' + s.total;
     }
-    fmtEl('retention-young', 'retention-young-count', stats.young);
-    fmtEl('retention-mature', 'retention-mature-count', stats.mature);
-    fmtEl('retention-total', 'retention-total-count', stats.total);
+    fmtEl('retention-young', 'retention-young-ring', 'retention-young-count', stats.young);
+    fmtEl('retention-mature', 'retention-mature-ring', 'retention-mature-count', stats.mature);
+    fmtEl('retention-total', 'retention-total-ring', 'retention-total-count', stats.total);
+
+    var yTotal = (stats.young && stats.young.total) ? stats.young.total : 0;
+    var mTotal = (stats.mature && stats.mature.total) ? stats.mature.total : 0;
+    var grand = yTotal + mTotal;
+    if (grand > 0) {
+        var mPct = Math.round(mTotal / grand * 100);
+        var yPct = 100 - mPct;
+        var mFill = document.getElementById('dash-ratio-mature-fill');
+        var yFill = document.getElementById('dash-ratio-young-fill');
+        var mPctEl = document.getElementById('dash-ratio-mature-pct');
+        var yPctEl = document.getElementById('dash-ratio-young-pct');
+        if (mFill) mFill.style.width = mPct + '%';
+        if (yFill) yFill.style.width = yPct + '%';
+        if (mPctEl) mPctEl.textContent = mPct + '%';
+        if (yPctEl) yPctEl.textContent = yPct + '%';
+    }
 }
 
 function populateHeatmapDeckSelect() {
@@ -348,6 +373,7 @@ function populateHeatmapDeckSelect() {
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
+    syncCustomSelect('heatmap-deck-select');
 }
 
 function fetchHeatmap() {
@@ -360,6 +386,31 @@ function updateHeatmap(data) {
     document.getElementById('heatmap-current-streak').textContent = data.current_streak;
     document.getElementById('heatmap-longest-streak').textContent = data.longest_streak;
     document.getElementById('heatmap-year-total').textContent = data.year_total.toLocaleString();
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    function toDS(d) {
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+
+    var elToday = document.getElementById('dash-today-reviews');
+    if (elToday) elToday.textContent = (data.counts[toDS(today)] || 0).toLocaleString();
+
+    var sum7 = 0;
+    for (var i = 0; i < 7; i++) {
+        var d7 = new Date(today);
+        d7.setDate(d7.getDate() - i);
+        sum7 += data.counts[toDS(d7)] || 0;
+    }
+    var avg7 = Math.round(sum7 / 7 * 10) / 10;
+    var el7 = document.getElementById('dash-7day-avg');
+    if (el7) el7.textContent = avg7 + ' / day';
+
+    var dayOfYear = Math.max(1, Math.ceil((today - new Date(today.getFullYear(), 0, 1)) / 86400000));
+    var yearAvg = Math.round(data.year_total / dayOfYear * 10) / 10;
+    var elYA = document.getElementById('dash-year-avg');
+    if (elYA) elYA.textContent = yearAvg + ' / day';
+
     renderHeatmapSVG(data.counts);
 }
 
@@ -641,17 +692,12 @@ function renderDeckList() {
             frag.appendChild(makeSiblingDropZone(deck.parent_id, item.siblingIndex, depth));
         }
         var card = document.createElement('div');
-        card.className = 'card text-white mb-3 deck-card';
+        card.className = 'card mb-3 deck-card';
         card.setAttribute('draggable', 'true');
         card.dataset.deckId = deck.id;
-        card.style.backgroundColor = '#2d2a3e';
-        card.style.borderTop = depth === 0 ? '3px solid ' + currentAccent : '1px solid #3d3a50';
-        card.style.borderLeft = 'none';
-        card.style.borderRight = 'none';
-        card.style.borderBottom = '1px solid #3d3a50';
         card.style.cursor = 'pointer';
         card.style.maxWidth = '600px';
-        card.style.transition = 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease';
+        card.style.transition = 'background-color 0.15s ease, box-shadow 0.15s ease, outline 0.15s ease, opacity 0.15s ease';
         if (depth > 0) {
             card.style.marginLeft = (depth * 1.5) + 'rem';
             card.style.maxWidth = (600 - depth * 24) + 'px';
@@ -717,7 +763,7 @@ function renderDeckList() {
                 '<div style="display:flex; align-items:center;">' +
                     chevron +
                     '<div>' +
-                        '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
+                        '<h5 class="card-title mb-0" style="color: var(--text-1); font-weight: 600;">' + deck.name + '</h5>' +
                         '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
                     '</div>' +
                 '</div>' +
@@ -725,8 +771,8 @@ function renderDeckList() {
                     dueBadge + newBadge + emptyLabel +
                 '</div>' +
             '</div>';
-        card.addEventListener('mouseenter', function() { if (!deckDragId) card.style.backgroundColor = '#35324a'; });
-        card.addEventListener('mouseleave', function() { card.style.backgroundColor = '#2d2a3e'; });
+        card.addEventListener('mouseenter', function() { if (!deckDragId) card.classList.add('deck-card-hover'); });
+        card.addEventListener('mouseleave', function() { card.classList.remove('deck-card-hover'); });
         card.addEventListener('click', function(e) {
             // If the chevron toggle was clicked, collapse/expand instead of navigating
             var toggle = e.target.closest('.deck-collapse-toggle');
@@ -818,13 +864,13 @@ function showDeckDetails(deck) {
     var remainingNew = Math.max(0, deck.total - deck.young - deck.mature);
     deckDetailsView.innerHTML = `
         <input type="hidden" id="current-deck-id" value="${deck.id}">
-        <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">\u2190 Back</button>
+        <button class="btn btn-dark btn-back mb-3" onclick="showView('srs')">\u2190 Back</button>
         <div class="d-flex align-items-center justify-content-between mb-4" style="flex-wrap: wrap; gap: 1rem;">
             <h1 class="mb-0">${deck.name}</h1>
             <div class="d-flex" style="gap: 0.75rem; flex-wrap: wrap;">
                 <button class="btn btn-dark btn-accent" onclick="startReview(${deck.id})" style="font-weight: 600; min-width: 9rem; height: 2.75rem;">Start Review</button>
                 <button class="btn btn-dark btn-accent" onclick="showCreateCard(${deck.id})" style="font-weight: 600; height: 2.75rem;">Add Card</button>
-                <button class="btn btn-dark" onclick="showDeckSettings()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.75rem;">Settings</button>
+                <button class="btn btn-dark btn-action" onclick="showDeckSettings()">Settings</button>
             </div>
         </div>
 
@@ -845,7 +891,7 @@ function showDeckDetails(deck) {
                         <div class="dash-stat-value">${deck.total}</div>
                     </div>
                 </div>
-                <hr style="border-color: #3d3a50; margin: 0 0 0.75rem;">
+                <hr style="margin: 0 0 0.75rem;">
                 <div class="row text-center g-0">
                     <div class="col dash-stat-cell">
                         <div class="dash-stat-label">Young</div>
@@ -897,9 +943,9 @@ function showDeckDetails(deck) {
             paper_bgcolor: 'transparent',
             plot_bgcolor:  'transparent',
             showlegend: true,
-            legend: { font: { color: 'white', size: 13 }, bgcolor: 'transparent', orientation: 'h', x: 0.5, xanchor: 'center', y: -0.08 },
+            legend: { font: { color: '#1a1133', size: 13 }, bgcolor: 'transparent', orientation: 'h', x: 0.5, xanchor: 'center', y: -0.08 },
             margin: { t: 10, b: 40, l: 10, r: 10 },
-            font: { color: 'white' },
+            font: { color: '#1a1133' },
             hoverlabel: { bgcolor: '#2d2a3e', bordercolor: currentAccent, font: { color: 'white', size: 13 } }
         }, { responsive: true, displayModeBar: false });
     }
@@ -1572,6 +1618,7 @@ function populateBrowseDeckSelect() {
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
+    syncCustomSelect('browse-deck-select');
 }
 
 function fetchBrowseCards() {
@@ -2295,7 +2342,7 @@ function renderImmersionCategoryList() {
     immersionCategories.forEach(function(c) {
         html += '<div class="immersion-category-row" id="cat-row-' + c.id + '">'
             + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
-            + '<span style="flex: 1; font-size: 0.92rem; color: #fff;">' + escapeHtml(c.name) + '</span>'
+            + '<span style="flex: 1; font-size: 0.92rem; color: var(--text-1);">' + escapeHtml(c.name) + '</span>'
             + '<button class="btn btn-sm" onclick="editImmersionCategory(' + c.id + ')" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Edit</button>'
             + '<button class="btn btn-sm" onclick="deleteImmersionCategory(' + c.id + ', \'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')" style="color: #e74c3c; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Delete</button>'
             + '</div>';
@@ -2380,10 +2427,10 @@ function updateImmersionStats(stats) {
             + '<div class="d-flex justify-content-between align-items-center">'
             + '<div class="d-flex align-items-center gap-2">'
             + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
-            + '<span style="font-size: 0.9rem; color: #fff;">' + escapeHtml(c.name) + '</span>'
+            + '<span style="font-size: 0.9rem; color: var(--text-1);">' + escapeHtml(c.name) + '</span>'
             + '</div>'
             + '<div style="text-align: right;">'
-            + '<span style="font-size: 0.9rem; font-weight: 600; color: #fff;">' + formatDuration(c.total_seconds) + '</span>'
+            + '<span style="font-size: 0.9rem; font-weight: 600; color: var(--text-1);">' + formatDuration(c.total_seconds) + '</span>'
             + '<span style="font-size: 0.78rem; color: #888; margin-left: 0.5rem;">' + pct.toFixed(1) + '%</span>'
             + '</div>'
             + '</div>'
@@ -2451,8 +2498,8 @@ function updateImmersionLogs(logs) {
     logs.forEach(function(log) {
         html += '<div class="immersion-log-row">'
             + '<span class="immersion-color-dot" style="background-color: ' + log.category_color + ';"></span>'
-            + '<span style="flex: 1; color: #ddd;">' + escapeHtml(log.category_name) + '</span>'
-            + '<span style="font-weight: 600; color: #fff; min-width: 5rem; text-align: right;">' + formatDuration(log.duration_seconds) + '</span>'
+            + '<span style="flex: 1; color: var(--text-1);">' + escapeHtml(log.category_name) + '</span>'
+            + '<span style="font-weight: 600; color: var(--text-1); min-width: 5rem; text-align: right;">' + formatDuration(log.duration_seconds) + '</span>'
             + '<span style="color: #888; min-width: 6.5rem; text-align: right; font-size: 0.8rem;">' + log.log_date + '</span>'
             + '<button class="btn btn-sm" onclick="deleteImmersionLog(' + log.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
             + '</div>';
@@ -2532,7 +2579,7 @@ function renderMediaCategoryList() {
     mediaCategories.forEach(function(c) {
         html += '<div class="immersion-category-row" id="media-cat-row-' + c.id + '">'
             + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
-            + '<span style="flex: 1; font-size: 0.88rem; color: #fff;">' + escapeHtml(c.name) + '</span>'
+            + '<span style="flex: 1; font-size: 0.88rem; color: var(--text-1);">' + escapeHtml(c.name) + '</span>'
             + '<button class="btn btn-sm" onclick="editMediaCategory(' + c.id + ')" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Edit</button>'
             + '<button class="btn btn-sm" onclick="deleteMediaCategory(' + c.id + ', \'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')" style="color: #e74c3c; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Delete</button>'
             + '</div>';
@@ -2603,12 +2650,12 @@ function renderMediaEntries() {
             ? '<span class="immersion-color-dot" style="background-color: ' + e.category_color + '; flex-shrink: 0;"></span>'
             : '<span class="immersion-color-dot" style="background-color: #555; flex-shrink: 0;"></span>';
         var catLabel = e.category_name
-            ? '<span style="color: #bbb; font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
-            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
+            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
+            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
         var durLabel = e.duration_seconds
-            ? '<span style="color: #aaa; font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
-            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
-        html += '<div class="immersion-log-row" style="color: #fff;">'
+            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
+            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
+        html += '<div class="immersion-log-row" style="color: var(--text-1);">'
             + catDot
             + '<span style="flex: 1; font-weight: 600; font-size: 0.9rem;">' + escapeHtml(e.title) + '</span>'
             + catLabel
@@ -2711,12 +2758,12 @@ function renderFullMediaLog() {
             ? '<span class="immersion-color-dot" style="background-color: ' + e.category_color + '; flex-shrink: 0;"></span>'
             : '<span class="immersion-color-dot" style="background-color: #555; flex-shrink: 0;"></span>';
         var catLabel = e.category_name
-            ? '<span style="color: #bbb; font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
-            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
+            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
+            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
         var durLabel = e.duration_seconds
-            ? '<span style="color: #aaa; font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
-            : '<span style="color: #555; font-size: 0.8rem;">—</span>';
-        html += '<div class="immersion-log-row" style="color: #fff;">'
+            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
+            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
+        html += '<div class="immersion-log-row" style="color: var(--text-1);">'
             + catDot
             + '<span style="flex: 1; font-weight: 600; font-size: 0.9rem;">' + escapeHtml(e.title) + '</span>'
             + catLabel
@@ -3043,3 +3090,142 @@ function escapeHtml(text) {
 function jsonAttr(val) {
     return JSON.stringify(val).replace(/"/g, '&quot;');
 }
+
+// ── Custom select dropdowns ──────────────────────────────────────
+// Native <select> popups render incorrectly in QtWebEngine (infinite white box).
+// Menu is appended directly to <body> when opened so that CSS transforms on
+// ancestor cards (e.g. hover translateY) cannot hijack position:fixed coordinates.
+
+var _cselActive = null;
+var _cselActiveMenu = null;
+var _cselBackdrop = null;
+
+function _cselCloseAll() {
+    if (_cselActiveMenu) {
+        if (_cselActiveMenu.parentNode) _cselActiveMenu.parentNode.removeChild(_cselActiveMenu);
+        _cselActiveMenu = null;
+    }
+    if (_cselActive) {
+        _cselActive.classList.remove('csel-open');
+        _cselActive = null;
+    }
+    if (_cselBackdrop && _cselBackdrop.parentNode) {
+        _cselBackdrop.parentNode.removeChild(_cselBackdrop);
+    }
+}
+
+function _cselShowBackdrop() {
+    if (!_cselBackdrop) {
+        _cselBackdrop = document.createElement('div');
+        _cselBackdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9990;background:transparent;';
+        _cselBackdrop.addEventListener('click', _cselCloseAll);
+    }
+    if (!_cselBackdrop.parentNode) document.body.appendChild(_cselBackdrop);
+}
+
+document.addEventListener('scroll', _cselCloseAll, true);
+
+function wrapSelect(sel) {
+    if (sel._cselDone) return;
+    sel._cselDone = true;
+
+    var isDash = sel.classList.contains('dash-select');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'csel' + (isDash ? ' csel-pill' : ' csel-box');
+    if (sel.style.width) {
+        wrap.style.width = sel.style.width;
+    } else if (!isDash) {
+        wrap.style.width = '100%';
+    }
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'csel-btn';
+
+    var lbl = document.createElement('span');
+    lbl.className = 'csel-lbl';
+
+    var chev = document.createElement('span');
+    chev.className = 'csel-chev';
+    chev.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    btn.appendChild(lbl);
+    btn.appendChild(chev);
+
+    // menu is NOT appended to wrap — it lives in <body> only while open
+    var menu = document.createElement('div');
+    menu.className = 'csel-menu';
+    menu.style.cssText = 'position:fixed;z-index:9999;display:block;';
+
+    wrap.appendChild(btn);
+    sel.parentNode.insertBefore(wrap, sel);
+    sel.style.cssText = 'display:none !important;';
+    wrap.appendChild(sel);
+
+    function syncLabel() {
+        var idx = sel.selectedIndex;
+        lbl.textContent = (idx >= 0 && sel.options[idx]) ? sel.options[idx].text : '';
+    }
+
+    function buildMenu() {
+        menu.innerHTML = '';
+        Array.from(sel.options).forEach(function(opt) {
+            var item = document.createElement('div');
+            item.className = 'csel-item' + (opt.value === sel.value ? ' csel-item-on' : '');
+            item.textContent = opt.text;
+            item.addEventListener('click', function() {
+                sel.value = opt.value;
+                syncLabel();
+                _cselCloseAll();
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            menu.appendChild(item);
+        });
+    }
+
+    function positionMenu() {
+        var rect = btn.getBoundingClientRect();
+        menu.style.left = rect.left + 'px';
+        menu.style.right = 'auto';
+        menu.style.minWidth = rect.width + 'px';
+        var spaceBelow = window.innerHeight - rect.bottom;
+        if (spaceBelow < 160 && rect.top > 160) {
+            menu.style.top = 'auto';
+            menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        } else {
+            menu.style.bottom = 'auto';
+            menu.style.top = (rect.bottom + 4) + 'px';
+        }
+    }
+
+    btn.addEventListener('click', function() {
+        var isOpen = (_cselActive === wrap);
+        _cselCloseAll();
+        if (!isOpen) {
+            buildMenu();
+            document.body.appendChild(menu);
+            positionMenu();
+            wrap.classList.add('csel-open');
+            _cselActive = wrap;
+            _cselActiveMenu = menu;
+            _cselShowBackdrop();
+        }
+    });
+
+    new MutationObserver(syncLabel).observe(sel, { childList: true, subtree: true });
+
+    sel._cselSyncLabel = syncLabel;
+    syncLabel();
+}
+
+function syncCustomSelect(id) {
+    var sel = document.getElementById(id);
+    if (sel && sel._cselSyncLabel) sel._cselSyncLabel();
+}
+
+function wrapAllSelects() {
+    document.querySelectorAll('select').forEach(wrapSelect);
+}
+
+document.addEventListener('DOMContentLoaded', wrapAllSelects);
