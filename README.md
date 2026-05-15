@@ -19,13 +19,9 @@ Flashcards · Immersion tracking · Statistics · Hover dictionary
 
 ---
 
-![Immersion Suite Dashboard](docs/Screenshot%202026-05-15%20014956.png)
-
----
-
 ## What is Immersion Suite?
 
-Immersion Suite is a free, open-source desktop app built for learners who use the immersion method. It combines everything you need into one place — a full spaced-repetition system, an immersion log, detailed statistics, and a browser extension that lets you look up any word on any webpage without breaking your reading flow.
+Immersion Suite is a free, open-source desktop app built for learners who use the immersion method. It combines everything you need into one place including a full SM-2 based spaced-repetition system, an immersion log, detailed statistics, and a browser extension that lets you look up any word on any webpage without breaking your reading flow.
 
 No subscriptions. No cloud. Everything runs on your machine.
 
@@ -34,7 +30,7 @@ No subscriptions. No cloud. Everything runs on your machine.
 ## Features
 
 ### 🧠 Spaced Repetition (SRS)
-- SM2 scheduling — cards surface exactly when you need them
+- SM2 scheduling: cards surface exactly when you need them
 - Multiple decks with independent settings
 - Custom card types with HTML/CSS front & back templates
 - Configurable learning and relearning steps
@@ -61,7 +57,7 @@ No subscriptions. No cloud. Everything runs on your machine.
 - Hold **Shift** and hover over any Japanese text in Chrome or Firefox
 - Instant popup dictionary powered by [Jitendex](https://jitendex.org/) (~295k entries)
 - Furigana, part-of-speech, frequency tags, and deinflection
-- Connects to the desktop app over a local WebSocket — no external requests
+- Connects to the desktop app over a local WebSocket with no external requests
 - Works on any website
 
 ---
