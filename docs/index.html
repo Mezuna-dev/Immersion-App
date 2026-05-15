@@ -209,7 +209,8 @@
       border: 1.5px solid var(--border-md);
       border-bottom: 4px solid var(--border-md);
     }
-    .btn-ghost:hover { color: var(--text-1); border-color: var(--accent); }
+    .btn-ghost:hover { color: var(--text-1); border-color: var(--accent); transform: translateY(-1px); }
+    .btn-ghost:active { border-bottom-width: 0; transform: translateY(4px); }
 
     /* ── APP PREVIEW ── */
     .preview-wrap {
@@ -1319,7 +1320,7 @@
         </div>
 
         <div style="margin-top:1.8rem;">
-          <a class="btn btn-ghost" href="https://github.com/Mezuna-dev/Immersion-Suite/blob/main/docs/browser-extension.md" target="_blank" rel="noopener">
+          <a class="btn btn-secondary" href="https://github.com/Mezuna-dev/Immersion-Suite/blob/main/docs/browser-extension.md" target="_blank" rel="noopener">
             Read extension docs →
           </a>
         </div>
@@ -1341,7 +1342,6 @@
             </div>
             <div class="popup-tags">
               <span class="popup-tag common">common</span>
-              <span class="popup-tag freq">top 1000</span>
             </div>
             <div class="popup-pos-row">
               <span class="popup-pos">noun</span>
@@ -1387,18 +1387,18 @@
       </div>
 
       <div class="download-card">
-        <div class="dl-platform">Linux
-        </div>
-        <div class="dl-file">ImmersionSuite_v1.x.x_Linux_x86_64.run</div>
-        <p class="dl-note">x86_64. Run the shell installer, no root required.</p>
-        <a class="btn btn-secondary" href="https://github.com/Mezuna-dev/Immersion-Suite/releases/latest/download/ImmersionSuite_v1.2.0_Linux_x86_64.run">
+        <div class="dl-platform">Linux</div>
+        <div class="dl-file">ImmersionSuite_v1.3.0_Linux_x86_64.run</div>
+        <p class="dl-note">x86_64 · No root required.</p>
+        <a class="btn btn-secondary" href="https://github.com/Mezuna-dev/Immersion-Suite/releases/latest/download/ImmersionSuite_v1.3.0_Linux_x86_64.run">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M8 12l-5-5 1.4-1.4L7 9.2V1h2v8.2l2.6-3.6L13 7l-5 5zm-6 2h12v2H2v-2z"/>
           </svg>
           Download for Linux
         </a>
-        <div class="dl-note" style="margin-top:-0.25rem;">
-          <code style="font-size:0.78em;color:var(--text-3);">bash ImmersionSuite_*.run</code>
+        <div style="margin-top:0.25rem;">
+          <p style="font-size:0.82rem;font-weight:600;color:var(--text-2);margin-bottom:0.4rem;">Then open a terminal and run:</p>
+          <code style="font-size:0.82rem;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(170,0,255,0.15);border-radius:8px;padding:0.5rem 0.75rem;display:block;word-break:break-all;">bash ImmersionSuite_v1.3.0_Linux_x86_64.run</code>
         </div>
       </div>
     </div>
