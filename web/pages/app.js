@@ -3,7 +3,7 @@ var cardTypes = [];
 var decks = [];
 var fieldCounter = 0;
 var createCardPreselectedDeckId = null;
-var currentAccent = '#9067C6';
+var currentAccent = '#aa00ff';
 var currentFontSize = 'medium';
 var FONT_SIZE_MAP = { small: '1.5rem', medium: '2.5rem', large: '4rem' };
 var collapsedDecks = new Set();
@@ -18,7 +18,7 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
 });
 
 function applyAppSettings(settings) {
-    currentAccent = settings.accent_color || '#9067C6';
+    currentAccent = settings.accent_color || '#aa00ff';
     currentFontSize = settings.font_size || 'medium';
     document.documentElement.style.setProperty('--accent', currentAccent);
     document.documentElement.style.setProperty('--review-font-size', FONT_SIZE_MAP[currentFontSize] || '2.5rem');
@@ -173,7 +173,7 @@ function saveAppSettings() {
 }
 
 function resetAppearanceSettings() {
-    var settings = buildSettings({ accent_color: '#9067C6', font_size: 'medium' });
+    var settings = buildSettings({ accent_color: '#aa00ff', font_size: 'medium' });
     applyAppSettings(settings);
     showAppSettings();
     if (bridge) bridge.saveAppSettings(JSON.stringify(settings));
@@ -262,7 +262,7 @@ function showView(viewId) {
         fetchImmersionStats();
         bridge.getImmersionLogs();
         bridge.getMediaCategories();
-        bridge.getMediaEntries();
+        bridge.getMediaItems();
     }
 }
 
@@ -1236,7 +1236,7 @@ function showNextCard() {
         if (ft.indexOf('[image:') !== -1 || ft.indexOf('[sound:') !== -1) {
             setInnerHTMLWithScripts(frontEl, resolveMedia(ft));
         } else {
-            frontEl.textContent = ft;
+            setInnerHTMLWithScripts(frontEl, ft);
         }
     }
     if (currentReviewBehavior.autoplay_audio) playAudioSequentially(frontEl);
@@ -1258,7 +1258,7 @@ function revealAnswer() {
             if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
                 setInnerHTMLWithScripts(frontEl, resolveMedia(bt));
             } else {
-                frontEl.textContent = bt;
+                setInnerHTMLWithScripts(frontEl, bt);
             }
         }
         if (currentReviewBehavior.autoplay_audio) playAudioSequentially(frontEl);
@@ -1270,7 +1270,7 @@ function revealAnswer() {
             if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
                 setInnerHTMLWithScripts(backEl, resolveMedia(bt));
             } else {
-                backEl.textContent = bt;
+                setInnerHTMLWithScripts(backEl, bt);
             }
         }
         if (currentReviewBehavior.autoplay_audio) playAudioSequentially(backEl);
@@ -1359,6 +1359,52 @@ function showReviewComplete() {
     document.getElementById('review-complete-section').style.display = 'flex';
     var cssEl = document.getElementById('review-card-css');
     if (cssEl) cssEl.textContent = '';
+}
+
+// ── Review card menu ──────────────────────────────────────────
+
+function toggleReviewMenu(e) {
+    if (e) e.stopPropagation();
+    var menu = document.getElementById('review-card-menu');
+    var open = menu.style.display !== 'none';
+    menu.style.display = open ? 'none' : 'block';
+    if (!open) {
+        document.addEventListener('click', closeReviewMenu, { once: true });
+    }
+}
+
+function closeReviewMenu() {
+    var menu = document.getElementById('review-card-menu');
+    if (menu) menu.style.display = 'none';
+}
+
+function editReviewCard() {
+    closeReviewMenu();
+    if (!currentCard) return;
+    editSourceView = 'review';
+    editCardFromBrowser(currentCard.id);
+}
+
+function deleteReviewCard() {
+    closeReviewMenu();
+    if (!currentCard) return;
+    var cardId = currentCard.id;
+    showConfirm('Delete this card? This cannot be undone.', function() {
+        if (bridge) bridge.deleteCardFromBrowser(cardId);
+        if (currentCardSource === 'new') {
+            newQueue.splice(newCardIndex, 1);
+            if (newCardIndex > 0) newCardIndex--;
+        } else if (currentCardSource === 'due') {
+            dueQueue.splice(dueCardIndex, 1);
+            if (dueCardIndex > 0) dueCardIndex--;
+        } else if (currentCardSource === 'learning') {
+            var idx = learningQueue.findIndex(function(e) { return e.id === cardId; });
+            if (idx !== -1) learningQueue.splice(idx, 1);
+        }
+        currentCard = null;
+        updateReviewCounts();
+        showNextCard();
+    });
 }
 
 document.addEventListener('keydown', function(e) {
@@ -1742,6 +1788,7 @@ function renderBrowsePage() {
 }
 
 var editCardData = null; // Store the card being edited
+var editSourceView = null; // Track where the edit was initiated from
 
 function editCardFromBrowser(cardId) {
     if (bridge) {
@@ -2086,7 +2133,31 @@ function saveEditCard() {
     if (bridge) {
         bridge.updateCard(cardId, deckId, typeId, JSON.stringify(fieldsObj), front, back);
         showAlert('Card saved.');
-        showView('card-browser');
+        if (editSourceView === 'review' && currentCard && currentCard.id === cardId) {
+            currentCard.fields = fieldsObj;
+            currentCard.front = front;
+            currentCard.back = back;
+            document.getElementById('review-card-css').textContent = currentCard.css_style || '';
+            var frontEl = document.getElementById('review-front-text');
+            if (currentCard.front_style) {
+                setInnerHTMLWithScripts(frontEl, resolveMedia(renderTemplate(currentCard.front_style, currentCard.fields || {})));
+            } else {
+                var ft = currentCard.front || '';
+                if (ft.indexOf('[image:') !== -1 || ft.indexOf('[sound:') !== -1) {
+                    setInnerHTMLWithScripts(frontEl, resolveMedia(ft));
+                } else {
+                    setInnerHTMLWithScripts(frontEl, ft);
+                }
+            }
+            document.getElementById('review-back-container').style.display = 'none';
+            document.getElementById('review-rating-buttons').style.display = 'none';
+            document.getElementById('review-show-answer-btn').style.display = 'block';
+            editSourceView = null;
+            showView('review');
+        } else {
+            editSourceView = null;
+            showView('card-browser');
+        }
     }
 }
 
@@ -2186,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (bridge) {
                 fetchImmersionStats();
                 bridge.getImmersionLogs();
-                bridge.getMediaEntries();
+                bridge.getMediaItems();
             }
         });
     }
@@ -2551,11 +2622,12 @@ var mediaCategories = [];
 function updateMediaCategories(cats) {
     mediaCategories = cats;
     populateMediaCategorySelect();
+    populateMediaLibraryCategoryFilter();
     renderMediaCategoryList();
 }
 
 function populateMediaCategorySelect() {
-    var sel = document.getElementById('media-entry-category');
+    var sel = document.getElementById('media-add-item-cat');
     if (!sel) return;
     var prev = sel.value;
     sel.innerHTML = '<option value="0">— None —</option>';
@@ -2628,158 +2700,318 @@ function deleteMediaCategory(catId, catName) {
     });
 }
 
-// --- Media Tracker ---
+// --- Media Library ---
 
-var mediaEntries = [];
+var mediaItems = [];
+var mediaStatusFilter = 'all';
+var expandedMediaItems = {};
 
-function updateMediaEntries(entries) {
-    mediaEntries = entries;
-    renderMediaEntries();
+function updateMediaItems(items) {
+    mediaItems = items;
+    populateMediaLibraryCategoryFilter();
+    renderMediaLibrary();
 }
 
-function renderMediaEntries() {
-    var container = document.getElementById('media-entries-list');
-    if (!container) return;
-    if (!mediaEntries.length) {
-        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No entries yet. Add one above.</p>';
-        return;
-    }
-    var html = '';
-    mediaEntries.forEach(function(e) {
-        var catDot = e.category_color
-            ? '<span class="immersion-color-dot" style="background-color: ' + e.category_color + '; flex-shrink: 0;"></span>'
-            : '<span class="immersion-color-dot" style="background-color: #555; flex-shrink: 0;"></span>';
-        var catLabel = e.category_name
-            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
-            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
-        var durLabel = e.duration_seconds
-            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
-            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
-        html += '<div class="immersion-log-row" style="color: var(--text-1);">'
-            + catDot
-            + '<span style="flex: 1; font-weight: 600; font-size: 0.9rem;">' + escapeHtml(e.title) + '</span>'
-            + catLabel
-            + '<span style="color: #888; font-size: 0.8rem; min-width: 6rem; text-align: right;">' + (e.entry_date || '') + '</span>'
-            + durLabel
-            + '<button class="btn btn-sm" onclick="deleteMediaEntry(' + e.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
-            + '</div>';
+function setMediaStatusFilter(status) {
+    mediaStatusFilter = status;
+    document.querySelectorAll('.media-status-pill').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.status === status);
     });
-    container.innerHTML = html;
+    renderMediaLibrary();
 }
 
-function showMediaEntryForm() {
-    var form = document.getElementById('media-entry-form');
-    form.style.display = '';
-    document.getElementById('media-entry-title').value = '';
-    document.getElementById('media-entry-hours').value = '';
-    document.getElementById('media-entry-minutes').value = '';
-    var today = new Date();
-    var yyyy = today.getFullYear();
-    var mm = String(today.getMonth() + 1).padStart(2, '0');
-    var dd = String(today.getDate()).padStart(2, '0');
-    document.getElementById('media-entry-date').value = yyyy + '-' + mm + '-' + dd;
-}
-
-function hideMediaEntryForm() {
-    document.getElementById('media-entry-form').style.display = 'none';
-}
-
-function submitMediaEntry() {
-    var title = document.getElementById('media-entry-title').value.trim();
-    var catId = parseInt(document.getElementById('media-entry-category').value) || 0;
-    var hours = parseInt(document.getElementById('media-entry-hours').value) || 0;
-    var minutes = parseInt(document.getElementById('media-entry-minutes').value) || 0;
-    var entryDate = document.getElementById('media-entry-date').value;
-    if (!title) { showAlert('Please enter a title.'); return; }
-    if (!entryDate) { showAlert('Please select a date.'); return; }
-    var totalSeconds = (hours * 3600) + (minutes * 60);
-    if (bridge) bridge.createMediaEntry(title, catId, totalSeconds, entryDate);
-    hideMediaEntryForm();
-}
-
-function deleteMediaEntry(entryId) {
-    showConfirm('Delete this media entry?', function() {
-        if (bridge) bridge.deleteMediaEntry(entryId);
-    });
-}
-
-var allFullMediaEntries = [];
-
-function showFullMediaLog() {
-    var modal = document.getElementById('full-media-log-modal');
-    modal.style.display = 'flex';
-    document.getElementById('full-media-log-search').value = '';
-    document.getElementById('full-log-category-filter').value = '';
-    document.getElementById('full-media-log-list').innerHTML = '<p style="color:#888; font-size:0.88rem;">Loading…</p>';
-    if (bridge) bridge.getAllMediaEntries();
-}
-
-function hideFullMediaLog() {
-    document.getElementById('full-media-log-modal').style.display = 'none';
-}
-
-function updateFullMediaEntries(entries) {
-    allFullMediaEntries = entries;
-    var sel = document.getElementById('full-log-category-filter');
+function populateMediaLibraryCategoryFilter() {
+    var sel = document.getElementById('media-library-cat-filter');
+    if (!sel) return;
     var current = sel.value;
-    var names = [];
-    entries.forEach(function(e) {
-        if (e.category_name && names.indexOf(e.category_name) === -1) names.push(e.category_name);
-    });
-    names.sort();
     sel.innerHTML = '<option value="">All types</option>';
-    names.forEach(function(n) {
+    mediaCategories.forEach(function(c) {
         var opt = document.createElement('option');
-        opt.value = n;
-        opt.textContent = n;
-        if (n === current) opt.selected = true;
+        opt.value = String(c.id);
+        opt.textContent = c.name;
+        if (String(c.id) === current) opt.selected = true;
         sel.appendChild(opt);
     });
-    renderFullMediaLog();
 }
 
-function renderFullMediaLog() {
-    var container = document.getElementById('full-media-log-list');
+function renderMediaLibrary() {
+    var container = document.getElementById('media-library-list');
     if (!container) return;
-    var query = (document.getElementById('full-media-log-search').value || '').toLowerCase().trim();
-    var catFilter = document.getElementById('full-log-category-filter').value;
-    var filtered = allFullMediaEntries.filter(function(e) {
-        if (catFilter && e.category_name !== catFilter) return false;
-        if (query && e.title.toLowerCase().indexOf(query) === -1) return false;
+    var query = (document.getElementById('media-library-search') ? document.getElementById('media-library-search').value : '').toLowerCase().trim();
+    var catFilter = document.getElementById('media-library-cat-filter') ? document.getElementById('media-library-cat-filter').value : '';
+    var filtered = mediaItems.filter(function(item) {
+        if (mediaStatusFilter !== 'all' && item.status !== mediaStatusFilter) return false;
+        if (catFilter && String(item.category_id) !== catFilter) return false;
+        if (query && item.title.toLowerCase().indexOf(query) === -1) return false;
         return true;
     });
     if (!filtered.length) {
-        container.innerHTML = '<p style="color:#888; font-size:0.88rem;">' + (allFullMediaEntries.length ? 'No entries match.' : 'No entries yet.') + '</p>';
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem; padding: 0.5rem 0;">'
+            + (mediaItems.length ? 'No items match.' : 'No items yet. Add one above.') + '</p>';
         return;
     }
     var html = '';
-    filtered.forEach(function(e) {
-        var catDot = e.category_color
-            ? '<span class="immersion-color-dot" style="background-color: ' + e.category_color + '; flex-shrink: 0;"></span>'
-            : '<span class="immersion-color-dot" style="background-color: #555; flex-shrink: 0;"></span>';
-        var catLabel = e.category_name
-            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + escapeHtml(e.category_name) + '</span>'
-            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
-        var durLabel = e.duration_seconds
-            ? '<span style="color: var(--text-2); font-size: 0.8rem;">' + formatDuration(e.duration_seconds) + '</span>'
-            : '<span style="color: var(--text-3); font-size: 0.8rem;">—</span>';
-        html += '<div class="immersion-log-row" style="color: var(--text-1);">'
-            + catDot
-            + '<span style="flex: 1; font-weight: 600; font-size: 0.9rem;">' + escapeHtml(e.title) + '</span>'
-            + catLabel
-            + '<span style="color: #888; font-size: 0.8rem; min-width: 6rem; text-align: right;">' + (e.entry_date || '') + '</span>'
-            + durLabel
-            + '<button class="btn btn-sm" onclick="deleteMediaEntryFromModal(' + e.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
+    filtered.forEach(function(item) { html += buildMediaItemHtml(item); });
+    container.innerHTML = html;
+    wrapAllSelects();
+    // Re-expand any previously open items
+    Object.keys(expandedMediaItems).forEach(function(id) {
+        if (expandedMediaItems[id]) {
+            var detail = document.getElementById('media-item-detail-' + id);
+            var chevron = document.getElementById('media-item-chevron-' + id);
+            if (detail) detail.style.display = '';
+            if (chevron) chevron.textContent = '▲';
+        }
+    });
+}
+
+var STATUS_LABELS = { watching: 'Watching', completed: 'Completed', dropped: 'Dropped', plan_to_watch: 'Plan to Watch' };
+var STATUS_COLORS = { watching: '#4CAF50', completed: '#4e9af1', dropped: '#e74c3c', plan_to_watch: '#888' };
+
+function buildMediaItemHtml(item) {
+    var dotColor = item.category_color || '#555';
+    var statusLabel = STATUS_LABELS[item.status] || item.status;
+    var statusColor = STATUS_COLORS[item.status] || '#888';
+    var progressText = (item.progress || item.progress_max)
+        ? escapeHtml((item.progress || '—') + (item.progress_max ? ' / ' + item.progress_max : ''))
+        : '';
+    var timeText = item.total_seconds > 0 ? formatDuration(item.total_seconds) : '';
+    var catBadge = item.category_name
+        ? '<span style="font-size:0.7rem; color:' + dotColor + '; border:1px solid ' + dotColor + '; border-radius:3px; padding:0.05rem 0.35rem; white-space:nowrap; flex-shrink:0;">' + escapeHtml(item.category_name) + '</span>'
+        : '';
+    var statusBadge = '<span style="font-size:0.7rem; font-weight:600; color:' + statusColor + '; border:1px solid ' + statusColor + '; border-radius:3px; padding:0.05rem 0.35rem; white-space:nowrap; flex-shrink:0;">' + statusLabel + '</span>';
+
+    return '<div class="media-item-card" id="media-item-' + item.id + '">'
+        + '<div class="media-item-header" onclick="toggleMediaItem(' + item.id + ')">'
+        + '<span class="immersion-color-dot" style="background-color:' + dotColor + '; flex-shrink:0;"></span>'
+        + '<span style="flex:1; font-weight:600; font-size:0.9rem; color:var(--text-1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(item.title) + '</span>'
+        + catBadge + statusBadge
+        + (progressText ? '<span style="font-size:0.8rem; color:var(--text-2); white-space:nowrap; flex-shrink:0;">' + progressText + '</span>' : '')
+        + (timeText ? '<span style="font-size:0.8rem; color:var(--text-2); white-space:nowrap; flex-shrink:0; min-width:3.5rem; text-align:right;">' + timeText + '</span>' : '')
+        + '<span id="media-item-chevron-' + item.id + '" style="color:var(--text-3); font-size:0.65rem; flex-shrink:0;">▼</span>'
+        + '</div>'
+        + '<div id="media-item-detail-' + item.id + '" style="display:none; padding:0.6rem 0.75rem 0.75rem 1.4rem; border-top:1px solid var(--border);">'
+        + buildMediaItemDetailHtml(item)
+        + '</div>'
+        + '</div>';
+}
+
+function buildMediaItemDetailHtml(item) {
+    var notesHtml = item.notes
+        ? '<p style="font-size:0.82rem; color:var(--text-2); margin:0 0 0.5rem; font-style:italic;">' + escapeHtml(item.notes) + '</p>'
+        : '';
+    var datesHtml = '';
+    if (item.date_started || item.date_finished) {
+        var parts = [];
+        if (item.date_started) parts.push('Started: ' + item.date_started);
+        if (item.date_finished) parts.push('Finished: ' + item.date_finished);
+        datesHtml = '<p style="font-size:0.78rem; color:var(--text-3); margin:0 0 0.5rem;">' + parts.join('  ·  ') + '</p>';
+    }
+
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+    // Pre-select an immersion category matching the item's media category by name
+    var matchedImmCatId = 0;
+    if (item.category_name) {
+        var matchedCat = immersionCategories.find(function(c) {
+            return c.name.toLowerCase() === item.category_name.toLowerCase();
+        });
+        if (matchedCat) matchedImmCatId = matchedCat.id;
+    }
+    var defaultChecked = matchedImmCatId > 0;
+    var immCatSel = '<select id="session-imm-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.82rem; min-width:8rem;">'
+        + '<option value="0">— Category —</option>';
+    immersionCategories.forEach(function(c) {
+        immCatSel += '<option value="' + c.id + '"' + (c.id === matchedImmCatId ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
+    });
+    immCatSel += '</select>';
+
+    var sessionForm = '<div id="media-session-form-' + item.id + '" style="display:none;" class="media-form-panel mb-3 p-2">'
+        + '<div style="font-size:0.78rem; font-weight:600; color:var(--text-2); margin-bottom:0.4rem;">Log Session</div>'
+        + '<div class="d-flex flex-wrap gap-2 align-items-end">'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Hours</label><input type="number" min="0" placeholder="0" id="session-h-' + item.id + '" class="form-control settings-input" style="width:4.5rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Min</label><input type="number" min="0" max="59" placeholder="0" id="session-m-' + item.id + '" class="form-control settings-input" style="width:4.5rem; font-size:0.85rem;"></div>'
+        + '<div style="flex:1; min-width:8rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Progress note</label><input type="text" placeholder="e.g. Ep 12-13" id="session-prog-' + item.id + '" class="form-control settings-input" style="font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Date</label><input type="date" id="session-date-' + item.id + '" value="' + todayStr + '" class="form-control settings-input" style="font-size:0.85rem; width:9.5rem;"></div>'
+        + '<button class="btn btn-dark btn-accent btn-sm" onclick="submitMediaSession(' + item.id + '); event.stopPropagation();" style="height:2.2rem; font-size:0.78rem;">Save</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="hideMediaSessionForm(' + item.id + '); event.stopPropagation();" style="height:2.2rem; font-size:0.78rem; color:var(--text-muted);">Cancel</button>'
+        + '</div>'
+        + '<div class="d-flex align-items-center gap-2 mt-2" style="flex-wrap:wrap;">'
+        + '<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--text-2); cursor:pointer; user-select:none;">'
+        + '<input type="checkbox" id="session-imm-check-' + item.id + '"' + (defaultChecked ? ' checked' : '') + ' onchange="toggleSessionImmCat(' + item.id + ')" style="accent-color:var(--accent);">'
+        + 'Count as immersion'
+        + '</label>'
+        + '<div id="session-imm-cat-wrap-' + item.id + '"' + (defaultChecked ? '' : ' style="display:none;"') + '>'
+        + immCatSel
+        + '</div>'
+        + '</div>'
+        + '</div>';
+
+    var statusOpts = [['watching','Watching'],['completed','Completed'],['dropped','Dropped'],['plan_to_watch','Plan to Watch']];
+    var statusSel = '<select id="edit-status-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;">';
+    statusOpts.forEach(function(s) { statusSel += '<option value="' + s[0] + '"' + (item.status===s[0]?' selected':'') + '>' + s[1] + '</option>'; });
+    statusSel += '</select>';
+    var catSel = '<select id="edit-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;"><option value="0">— None —</option>';
+    mediaCategories.forEach(function(c) { catSel += '<option value="' + c.id + '"' + (item.category_id===c.id?' selected':'') + '>' + escapeHtml(c.name) + '</option>'; });
+    catSel += '</select>';
+
+    var editForm = '<div id="media-edit-form-' + item.id + '" style="display:none;" class="media-form-panel mb-3 p-2">'
+        + '<div style="font-size:0.78rem; font-weight:600; color:var(--text-2); margin-bottom:0.5rem;">Edit Item</div>'
+        + '<div class="d-flex flex-wrap gap-2 mb-2">'
+        + '<div style="flex:2; min-width:12rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Title</label><input type="text" id="edit-title-' + item.id + '" value="' + escapeHtml(item.title) + '" class="form-control settings-input" style="font-size:0.85rem;"></div>'
+        + '<div style="min-width:9rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Category</label>' + catSel + '</div>'
+        + '<div style="min-width:9rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Status</label>' + statusSel + '</div>'
+        + '</div>'
+        + '<div class="d-flex flex-wrap gap-2 mb-2">'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Progress</label><input type="text" id="edit-prog-' + item.id + '" value="' + escapeHtml(item.progress||'') + '" placeholder="e.g. 12" class="form-control settings-input" style="width:6rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Total</label><input type="text" id="edit-progmax-' + item.id + '" value="' + escapeHtml(item.progress_max||'') + '" placeholder="e.g. 75" class="form-control settings-input" style="width:6rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Started</label><input type="date" id="edit-started-' + item.id + '" value="' + (item.date_started||'') + '" class="form-control settings-input" style="width:9.5rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Finished</label><input type="date" id="edit-finished-' + item.id + '" value="' + (item.date_finished||'') + '" class="form-control settings-input" style="width:9.5rem; font-size:0.85rem;"></div>'
+        + '</div>'
+        + '<div class="mb-2"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Notes</label><input type="text" id="edit-notes-' + item.id + '" value="' + escapeHtml(item.notes||'') + '" placeholder="Optional" class="form-control settings-input" style="font-size:0.85rem;"></div>'
+        + '<div class="d-flex gap-2">'
+        + '<button class="btn btn-dark btn-accent btn-sm" onclick="submitMediaItemEdit(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem;">Save</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="hideMediaEditForm(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem; color:var(--text-muted);">Cancel</button>'
+        + '</div></div>';
+
+    return notesHtml + datesHtml
+        + '<div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;">'
+        + '<button class="btn btn-dark btn-accent btn-sm" onclick="showMediaSessionForm(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem;">+ Log Session</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="showMediaEditForm(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem; color:var(--text-2);">Edit</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="deleteMediaItem(' + item.id + ', ' + jsonAttr(item.title) + '); event.stopPropagation();" style="font-size:0.78rem; color:#e74c3c;">Delete</button>'
+        + '</div>'
+        + sessionForm + editForm
+        + '<div id="media-sessions-list-' + item.id + '" style="margin-top:0.4rem;"><p style="color:#666; font-size:0.82rem; margin:0;">Loading sessions…</p></div>';
+}
+
+function toggleMediaItem(itemId) {
+    var detail = document.getElementById('media-item-detail-' + itemId);
+    var chevron = document.getElementById('media-item-chevron-' + itemId);
+    if (!detail) return;
+    var isOpen = detail.style.display !== 'none';
+    if (isOpen) {
+        detail.style.display = 'none';
+        if (chevron) chevron.textContent = '▼';
+        expandedMediaItems[itemId] = false;
+    } else {
+        detail.style.display = '';
+        if (chevron) chevron.textContent = '▲';
+        expandedMediaItems[itemId] = true;
+        if (bridge) bridge.getMediaSessions(itemId);
+    }
+}
+
+function updateMediaSessions(itemId, sessions) {
+    var container = document.getElementById('media-sessions-list-' + itemId);
+    if (!container) return;
+    if (!sessions.length) {
+        container.innerHTML = '<p style="color:#666; font-size:0.82rem; margin:0.4rem 0 0;">No sessions logged yet.</p>';
+        return;
+    }
+    var html = '<div style="border-top:1px solid var(--border); padding-top:0.4rem; margin-top:0.4rem;">'
+        + '<span style="font-size:0.72rem; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:0.05em;">Sessions</span></div>';
+    sessions.forEach(function(s) {
+        var dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '—';
+        html += '<div style="display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text-2);">'
+            + (s.progress_note ? '<span style="color:var(--text-2);">' + escapeHtml(s.progress_note) + '</span><span style="color:#555;">·</span>' : '')
+            + '<span style="font-weight:600; color:var(--text-1);">' + dur + '</span>'
+            + '<span style="color:#666; margin-left:auto; flex-shrink:0;">' + s.session_date + '</span>'
+            + '<button class="btn btn-sm" onclick="deleteMediaSession(' + s.id + ',' + itemId + '); event.stopPropagation();" style="color:#e74c3c; font-size:0.7rem; padding:0.1rem 0.3rem;" title="Delete">✕</button>'
             + '</div>';
     });
     container.innerHTML = html;
 }
 
-function deleteMediaEntryFromModal(entryId) {
-    showConfirm('Delete this media entry?', function() {
-        if (bridge) bridge.deleteMediaEntry(entryId);
-        if (bridge) bridge.getAllMediaEntries();
+function toggleSessionImmCat(itemId) {
+    var checked = document.getElementById('session-imm-check-' + itemId).checked;
+    var wrap = document.getElementById('session-imm-cat-wrap-' + itemId);
+    if (wrap) wrap.style.display = checked ? '' : 'none';
+}
+
+function showMediaSessionForm(itemId) {
+    document.getElementById('media-session-form-' + itemId).style.display = '';
+    hideMediaEditForm(itemId);
+}
+function hideMediaSessionForm(itemId) {
+    document.getElementById('media-session-form-' + itemId).style.display = 'none';
+}
+function submitMediaSession(itemId) {
+    var h = parseInt(document.getElementById('session-h-' + itemId).value) || 0;
+    var m = parseInt(document.getElementById('session-m-' + itemId).value) || 0;
+    var prog = document.getElementById('session-prog-' + itemId).value.trim();
+    var sDate = document.getElementById('session-date-' + itemId).value;
+    if (!sDate) { showAlert('Please select a date.'); return; }
+    var immCatId = 0;
+    var immCheck = document.getElementById('session-imm-check-' + itemId);
+    if (immCheck && immCheck.checked) {
+        immCatId = parseInt(document.getElementById('session-imm-cat-' + itemId).value) || 0;
+        if (!immCatId) { showAlert('Please select an immersion category, or uncheck "Count as immersion".'); return; }
+    }
+    if (bridge) bridge.createMediaSession(itemId, (h * 3600) + (m * 60), prog, sDate, immCatId);
+    hideMediaSessionForm(itemId);
+}
+
+function showMediaEditForm(itemId) {
+    document.getElementById('media-edit-form-' + itemId).style.display = '';
+    hideMediaSessionForm(itemId);
+}
+function hideMediaEditForm(itemId) {
+    document.getElementById('media-edit-form-' + itemId).style.display = 'none';
+}
+function submitMediaItemEdit(itemId) {
+    var title = document.getElementById('edit-title-' + itemId).value.trim();
+    if (!title) { showAlert('Title is required.'); return; }
+    var catId = parseInt(document.getElementById('edit-cat-' + itemId).value) || 0;
+    var status = document.getElementById('edit-status-' + itemId).value;
+    var prog = document.getElementById('edit-prog-' + itemId).value.trim();
+    var progMax = document.getElementById('edit-progmax-' + itemId).value.trim();
+    var notes = document.getElementById('edit-notes-' + itemId).value.trim();
+    var started = document.getElementById('edit-started-' + itemId).value;
+    var finished = document.getElementById('edit-finished-' + itemId).value;
+    if (bridge) bridge.updateMediaItem(itemId, title, catId, status, prog, progMax, notes, started, finished);
+}
+
+function deleteMediaItem(itemId, title) {
+    showConfirm('Delete "' + title + '" and all its sessions? This cannot be undone.', function() {
+        if (bridge) bridge.deleteMediaItem(itemId);
+        expandedMediaItems[itemId] = false;
     });
+}
+
+function deleteMediaSession(sessionId, itemId) {
+    showConfirm('Delete this session?', function() {
+        if (bridge) bridge.deleteMediaSession(sessionId, itemId);
+    });
+}
+
+function showAddItemForm() {
+    document.getElementById('media-add-item-form').style.display = '';
+    document.getElementById('media-add-item-title').value = '';
+    document.getElementById('media-add-item-status').value = 'watching';
+    document.getElementById('media-add-item-cat').value = '0';
+    document.getElementById('media-add-item-prog').value = '';
+    document.getElementById('media-add-item-progmax').value = '';
+    document.getElementById('media-add-item-notes').value = '';
+    document.getElementById('media-add-item-started').value = '';
+    document.getElementById('media-add-item-title').focus();
+}
+
+function hideAddItemForm() {
+    document.getElementById('media-add-item-form').style.display = 'none';
+}
+
+function submitAddMediaItem() {
+    var title = document.getElementById('media-add-item-title').value.trim();
+    if (!title) { showAlert('Please enter a title.'); return; }
+    var catId = parseInt(document.getElementById('media-add-item-cat').value) || 0;
+    var status = document.getElementById('media-add-item-status').value;
+    var prog = document.getElementById('media-add-item-prog').value.trim();
+    var progMax = document.getElementById('media-add-item-progmax').value.trim();
+    var notes = document.getElementById('media-add-item-notes').value.trim();
+    var started = document.getElementById('media-add-item-started').value;
+    if (bridge) bridge.createMediaItem(title, catId, status, prog, progMax, notes, started);
+    hideAddItemForm();
 }
 
 // --- Anime / Manga Search (Jikan) ---
@@ -2818,22 +3050,9 @@ function malSearch() {
 function animeSearch() { malSearch(); }
 
 var animeEpisodesCache = {};
-var animeDurationCache = {};
-
-function parseDurationToHoursMinutes(durationStr) {
-    if (!durationStr || durationStr === 'Unknown') return null;
-    var totalMinutes = 0;
-    var hrMatch = durationStr.match(/(\d+)\s*hr/);
-    var minMatch = durationStr.match(/(\d+)\s*min/);
-    if (hrMatch) totalMinutes += parseInt(hrMatch[1]) * 60;
-    if (minMatch) totalMinutes += parseInt(minMatch[1]);
-    if (totalMinutes === 0) return null;
-    return { hours: Math.floor(totalMinutes / 60), minutes: totalMinutes % 60 };
-}
 
 function updateAnimeSearchResults(items, error) {
     animeEpisodesCache = {};
-    animeDurationCache = {};
     var errEl = document.getElementById('mal-search-error');
     var resultsEl = document.getElementById('mal-search-results');
     if (error) {
@@ -2844,143 +3063,43 @@ function updateAnimeSearchResults(items, error) {
     }
     errEl.style.display = 'none';
     if (!items.length) {
-        resultsEl.innerHTML = '<p style="color:#888; font-size:0.85rem;">No results found.</p>';
+        resultsEl.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No results found.</p>';
         return;
     }
     var html = '<div class="d-flex flex-column gap-1">';
     items.forEach(function(item) {
         var displayTitle = item.title_english || item.title;
-        if (item.duration) animeDurationCache[item.id] = item.duration;
+        if (item.episodes) animeEpisodesCache[item.id] = { totalEpisodes: item.episodes };
         var typeLabel = item.type || '';
         var epLabel = item.episodes ? item.episodes + ' ep' : '';
         var scoreLabel = item.score ? '★ ' + Number(item.score).toFixed(2) : '';
         var meta = [typeLabel, epLabel, scoreLabel].filter(Boolean).join(' · ');
-        var isMovie = item.type === 'Movie';
         var img = item.image
-            ? '<img src="' + item.image + '" style="width:3rem; height:4.2rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
-            : '<div style="width:3rem; height:4.2rem; background:#1e1b2e; border-radius:4px; flex-shrink:0;"></div>';
-        var epToggle = !isMovie
-            ? '<button id="anime-ep-toggle-' + item.id + '" class="btn btn-dark btn-sm" onclick="toggleAnimeEpisodes(' + item.id + ', ' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; background:#3a3555 !important;">▼ Episodes</button>'
-            : '';
-        html += '<div style="background:#1e1b2e; border-radius:6px; overflow:hidden;">'
-            + '<div class="d-flex align-items-center gap-3 p-2">'
+            ? '<img src="' + item.image + '" style="width:2.8rem; height:3.8rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
+            : '<div style="width:2.8rem; height:3.8rem; background:var(--bg-base); border-radius:4px; flex-shrink:0;"></div>';
+        html += '<div class="media-item-card" style="border-radius:6px;">'
+            + '<div class="d-flex align-items-center gap-2 p-2">'
             + img
             + '<div style="flex:1; min-width:0;">'
-            + '<div style="font-weight:600; font-size:0.9rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
-            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.75rem; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
-            + '<div style="font-size:0.75rem; color:#888; margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
+            + '<div style="font-weight:600; font-size:0.88rem; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
+            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.73rem; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
+            + '<div style="font-size:0.73rem; color:var(--text-muted); margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
             + '</div>'
-            + epToggle
-            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectAnime(' + item.id + ', ' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap;">+ Add</button>'
+            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectAnime(' + item.id + ', ' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; flex-shrink:0;">+ Add</button>'
             + '</div>'
-            + '<div id="anime-episodes-' + item.id + '" style="display:none;"></div>'
             + '</div>';
     });
     html += '</div>';
     resultsEl.innerHTML = html;
 }
 
-function toggleAnimeEpisodes(animeId, seriesTitle) {
-    var container = document.getElementById('anime-episodes-' + animeId);
-    var btn = document.getElementById('anime-ep-toggle-' + animeId);
-    if (!container) return;
-    var opening = container.style.display === 'none';
-    container.style.display = opening ? '' : 'none';
-    if (btn) btn.textContent = opening ? '▲ Episodes' : '▼ Episodes';
-    if (opening && !animeEpisodesCache[animeId]) {
-        animeEpisodesCache[animeId] = { items: [], hasNextPage: false, page: 0, seriesTitle: seriesTitle, loading: true };
-        container.innerHTML = '<p style="color:#888; font-size:0.82rem; padding:0.5rem 0.75rem;">Loading episodes…</p>';
-        if (bridge) bridge.fetchAnimeEpisodes(animeId, 1);
-    }
-}
-
-function updateAnimeEpisodes(animeId, items, hasNextPage, page, error) {
-    var container = document.getElementById('anime-episodes-' + animeId);
-    if (!container) return;
-    if (error) {
-        container.innerHTML = '<p style="color:#e06c75; font-size:0.82rem; padding:0.5rem 0.75rem;">' + escapeHtml(error) + '</p>';
-        return;
-    }
-    var cached = animeEpisodesCache[animeId] || { items: [], seriesTitle: '' };
-    cached.loading = false;
-    if (page === 1) {
-        cached.items = items;
-    } else {
-        cached.items = cached.items.concat(items);
-    }
-    cached.hasNextPage = hasNextPage;
-    cached.page = page;
-    animeEpisodesCache[animeId] = cached;
-    renderAnimeEpisodes(animeId);
-}
-
-function renderAnimeEpisodes(animeId) {
-    var container = document.getElementById('anime-episodes-' + animeId);
-    if (!container) return;
-    var cached = animeEpisodesCache[animeId];
-    if (!cached) return;
-    var seriesTitle = cached.seriesTitle;
-
-    var html = '<div style="border-top:1px solid #3a3555; max-height:16rem; overflow-y:auto;">';
-    if (!cached.items.length) {
-        html += '<p style="color:#888; font-size:0.82rem; padding:0.5rem 0.75rem;">No episodes found.</p>';
-    } else {
-        cached.items.forEach(function(ep) {
-            var label = 'Ep. ' + ep.num + (ep.title ? ': ' + ep.title : '');
-            var badges = '';
-            if (ep.filler) badges += ' <span style="font-size:0.62rem; background:#2d2a3e; color:#888; border-radius:3px; padding:0.05rem 0.3rem;">Filler</span>';
-            if (ep.recap) badges += ' <span style="font-size:0.62rem; background:#2d2a3e; color:#888; border-radius:3px; padding:0.05rem 0.3rem;">Recap</span>';
-            html += '<div class="d-flex align-items-center gap-2" style="padding:0.35rem 0.75rem; border-bottom:1px solid #2d2a3e;">'
-                + '<span style="flex:1; font-size:0.82rem; color:#fff;">' + escapeHtml(label) + badges + '</span>'
-                + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectEpisode(' + animeId + ',' + jsonAttr(seriesTitle) + ',' + ep.num + ',' + jsonAttr(ep.title || '') + ')" style="font-size:0.68rem; padding:0.1rem 0.45rem; white-space:nowrap;">+ Add</button>'
-                + '</div>';
-        });
-    }
-    html += '</div>';
-    if (cached.hasNextPage) {
-        html += '<div style="padding:0.4rem 0.75rem;">'
-            + '<button class="btn btn-sm" onclick="loadMoreEpisodes(' + animeId + ',' + (cached.page + 1) + ')" style="color:#888; font-size:0.78rem;">Load more episodes…</button>'
-            + '</div>';
-    }
-    container.innerHTML = html;
-}
-
-function loadMoreEpisodes(animeId, page) {
-    var cached = animeEpisodesCache[animeId];
-    if (!cached || cached.loading) return;
-    cached.loading = true;
-    var container = document.getElementById('anime-episodes-' + animeId);
-    if (container) {
-        var btn = container.querySelector('button');
-        if (btn && btn.textContent.indexOf('Load more') !== -1) btn.textContent = 'Loading…';
-    }
-    if (bridge) bridge.fetchAnimeEpisodes(animeId, page);
-}
-
-function fillDurationFields(animeId) {
-    var duration = animeDurationCache[animeId];
-    if (!duration) return;
-    var parsed = parseDurationToHoursMinutes(duration);
-    if (!parsed) return;
-    document.getElementById('media-entry-hours').value = parsed.hours > 0 ? parsed.hours : '';
-    document.getElementById('media-entry-minutes').value = parsed.minutes > 0 ? parsed.minutes : '';
-}
-
-function selectEpisode(animeId, seriesTitle, epNum, epTitle) {
-    var title = seriesTitle + ' - Ep. ' + epNum + (epTitle ? ': ' + epTitle : '');
-    showMediaEntryForm();
-    document.getElementById('media-entry-title').value = title;
-    var animeCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'anime'; });
-    if (animeCat) document.getElementById('media-entry-category').value = animeCat.id;
-    fillDurationFields(animeId);
-}
-
 function selectAnime(animeId, title) {
-    showMediaEntryForm();
-    document.getElementById('media-entry-title').value = title;
+    showAddItemForm();
+    document.getElementById('media-add-item-title').value = title;
     var animeCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'anime'; });
-    if (animeCat) document.getElementById('media-entry-category').value = animeCat.id;
-    fillDurationFields(animeId);
+    if (animeCat) document.getElementById('media-add-item-cat').value = animeCat.id;
+    var cached = animeEpisodesCache[animeId];
+    if (cached && cached.totalEpisodes) document.getElementById('media-add-item-progmax').value = String(cached.totalEpisodes);
     document.getElementById('mal-search-results').innerHTML = '';
     document.getElementById('mal-search-input').value = '';
 }
@@ -2998,7 +3117,7 @@ function updateMangaSearchResults(items, error) {
     }
     errEl.style.display = 'none';
     if (!items.length) {
-        resultsEl.innerHTML = '<p style="color:#888; font-size:0.85rem;">No results found.</p>';
+        resultsEl.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No results found.</p>';
         return;
     }
     var html = '<div class="d-flex flex-column gap-1">';
@@ -3010,72 +3129,30 @@ function updateMangaSearchResults(items, error) {
         var scoreLabel = item.score ? '★ ' + Number(item.score).toFixed(2) : '';
         var meta = [typeLabel, chLabel, volLabel, scoreLabel].filter(Boolean).join(' · ');
         var img = item.image
-            ? '<img src="' + item.image + '" style="width:3rem; height:4.2rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
-            : '<div style="width:3rem; height:4.2rem; background:#1e1b2e; border-radius:4px; flex-shrink:0;"></div>';
-
-        var chToggle = item.chapters
-            ? '<button id="manga-ch-toggle-' + item.id + '" class="btn btn-dark btn-sm" onclick="toggleMangaList(\'ch\',' + item.id + ',' + item.chapters + ',' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; background:#3a3555 !important;">▼ Chapters</button>'
-            : '';
-        var volToggle = item.volumes
-            ? '<button id="manga-vol-toggle-' + item.id + '" class="btn btn-dark btn-sm" onclick="toggleMangaList(\'vol\',' + item.id + ',' + item.volumes + ',' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; background:#3a3555 !important;">▼ Volumes</button>'
-            : '';
-
-        html += '<div style="background:#1e1b2e; border-radius:6px; overflow:hidden;">'
+            ? '<img src="' + item.image + '" style="width:2.8rem; height:3.8rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
+            : '<div style="width:2.8rem; height:3.8rem; background:var(--bg-base); border-radius:4px; flex-shrink:0;"></div>';
+        html += '<div class="media-item-card" style="border-radius:6px;">'
             + '<div class="d-flex align-items-center gap-2 p-2">'
             + img
             + '<div style="flex:1; min-width:0;">'
-            + '<div style="font-weight:600; font-size:0.9rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
-            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.75rem; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
-            + '<div style="font-size:0.75rem; color:#888; margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
+            + '<div style="font-weight:600; font-size:0.88rem; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
+            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.73rem; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
+            + '<div style="font-size:0.73rem; color:var(--text-muted); margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
             + '</div>'
-            + chToggle
-            + volToggle
-            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectManga(' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap;">+ Add</button>'
+            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectManga(' + jsonAttr(displayTitle) + ',' + (item.chapters || 0) + ')" style="font-size:0.72rem; white-space:nowrap; flex-shrink:0;">+ Add</button>'
             + '</div>'
-            + '<div id="manga-ch-' + item.id + '" style="display:none;"></div>'
-            + '<div id="manga-vol-' + item.id + '" style="display:none;"></div>'
             + '</div>';
     });
     html += '</div>';
     resultsEl.innerHTML = html;
 }
 
-function toggleMangaList(kind, mangaId, total, seriesTitle) {
-    var container = document.getElementById('manga-' + kind + '-' + mangaId);
-    var btn = document.getElementById('manga-' + kind + '-toggle-' + mangaId);
-    if (!container) return;
-    var opening = container.style.display === 'none';
-    container.style.display = opening ? '' : 'none';
-    var label = kind === 'ch' ? 'Chapters' : 'Volumes';
-    if (btn) btn.textContent = (opening ? '▲ ' : '▼ ') + label;
-    if (opening && !container.dataset.rendered) {
-        container.dataset.rendered = '1';
-        var singular = kind === 'ch' ? 'Ch.' : 'Vol.';
-        var html = '<div style="border-top:1px solid #3a3555; max-height:16rem; overflow-y:auto;">';
-        for (var i = 1; i <= total; i++) {
-            html += '<div class="d-flex align-items-center gap-2" style="padding:0.35rem 0.75rem; border-bottom:1px solid #2d2a3e;">'
-                + '<span style="flex:1; font-size:0.82rem; color:#fff;">' + escapeHtml(singular + ' ' + i) + '</span>'
-                + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectMangaEntry(' + jsonAttr(seriesTitle) + ',' + jsonAttr(singular) + ',' + i + ')" style="font-size:0.68rem; padding:0.1rem 0.45rem; white-space:nowrap;">+ Add</button>'
-                + '</div>';
-        }
-        html += '</div>';
-        container.innerHTML = html;
-    }
-}
-
-function selectMangaEntry(seriesTitle, singular, num) {
-    var title = seriesTitle + ' - ' + singular + ' ' + num;
-    showMediaEntryForm();
-    document.getElementById('media-entry-title').value = title;
+function selectManga(title, totalChapters) {
+    showAddItemForm();
+    document.getElementById('media-add-item-title').value = title;
+    if (totalChapters) document.getElementById('media-add-item-progmax').value = String(totalChapters);
     var mangaCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'manga'; });
-    if (mangaCat) document.getElementById('media-entry-category').value = mangaCat.id;
-}
-
-function selectManga(title) {
-    showMediaEntryForm();
-    document.getElementById('media-entry-title').value = title;
-    var mangaCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'manga'; });
-    if (mangaCat) document.getElementById('media-entry-category').value = mangaCat.id;
+    if (mangaCat) document.getElementById('media-add-item-cat').value = mangaCat.id;
     document.getElementById('mal-search-results').innerHTML = '';
     document.getElementById('mal-search-input').value = '';
 }

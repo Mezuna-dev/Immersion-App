@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFileDialog
 import shutil
 from PyQt6.QtCore import QObject, pyqtSlot, QUrl, Qt
 from PyQt6.QtGui import QColor
@@ -545,31 +545,64 @@ class AppBridge(QObject):
 
     # --- Media Tracker ---
 
-    @pyqtSlot(str, int, int, str)
-    def createMediaEntry(self, title, category_id, duration_seconds, entry_date):
+    @pyqtSlot(str, int, str, str, str, str, str)
+    def createMediaItem(self, title, category_id, status, progress, progress_max, notes, date_started):
         if title.strip():
-            database.create_media_entry(
+            database.create_media_item(
                 title.strip(),
                 category_id if category_id > 0 else None,
-                duration_seconds if duration_seconds > 0 else None,
-                entry_date or None,
+                status or 'plan_to_watch',
+                progress.strip() or None,
+                progress_max.strip() or None,
+                notes.strip() or None,
+                date_started or None,
             )
-        self.getMediaEntries()
+        self.getMediaItems()
 
     @pyqtSlot()
-    def getMediaEntries(self):
-        entries = database.get_media_entries()
-        self.web_view.page().runJavaScript(f'updateMediaEntries({json.dumps(entries)});')
+    def getMediaItems(self):
+        items = database.get_media_items()
+        self.web_view.page().runJavaScript(f'updateMediaItems({json.dumps(items)});')
 
-    @pyqtSlot()
-    def getAllMediaEntries(self):
-        entries = database.get_media_entries(limit=10000)
-        self.web_view.page().runJavaScript(f'updateFullMediaEntries({json.dumps(entries)});')
+    @pyqtSlot(int, str, int, str, str, str, str, str, str)
+    def updateMediaItem(self, item_id, title, category_id, status, progress, progress_max, notes, date_started, date_finished):
+        if title.strip():
+            database.update_media_item(
+                item_id, title.strip(), category_id if category_id > 0 else None,
+                status, progress, progress_max, notes, date_started, date_finished,
+            )
+        self.getMediaItems()
 
     @pyqtSlot(int)
-    def deleteMediaEntry(self, entry_id):
-        database.delete_media_entry(entry_id)
-        self.getMediaEntries()
+    def deleteMediaItem(self, item_id):
+        database.delete_media_item(item_id)
+        self.getMediaItems()
+
+    @pyqtSlot(int, int, str, str, int)
+    def createMediaSession(self, item_id, duration_seconds, progress_note, session_date, immersion_category_id):
+        database.create_media_session(
+            item_id,
+            duration_seconds if duration_seconds > 0 else None,
+            progress_note.strip() or None,
+            session_date or None,
+        )
+        if immersion_category_id > 0 and duration_seconds > 0:
+            database.create_immersion_log(immersion_category_id, duration_seconds, session_date or None)
+        self.getMediaItems()
+        sessions = database.get_media_sessions(item_id)
+        self.web_view.page().runJavaScript(f'updateMediaSessions({item_id}, {json.dumps(sessions)});')
+
+    @pyqtSlot(int)
+    def getMediaSessions(self, item_id):
+        sessions = database.get_media_sessions(item_id)
+        self.web_view.page().runJavaScript(f'updateMediaSessions({item_id}, {json.dumps(sessions)});')
+
+    @pyqtSlot(int, int)
+    def deleteMediaSession(self, session_id, item_id):
+        database.delete_media_session(session_id)
+        self.getMediaItems()
+        sessions = database.get_media_sessions(item_id)
+        self.web_view.page().runJavaScript(f'updateMediaSessions({item_id}, {json.dumps(sessions)});')
 
     # --- Media Categories ---
 
@@ -594,7 +627,7 @@ class AppBridge(QObject):
     def deleteMediaCategory(self, cat_id):
         database.delete_media_category(cat_id)
         self.getMediaCategories()
-        self.getMediaEntries()
+        self.getMediaItems()
 
     # --- Anime / Manga Search (Jikan) ---
 

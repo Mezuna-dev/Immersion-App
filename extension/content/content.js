@@ -557,7 +557,8 @@
         popupEl.style.left = '-9999px';
         popupEl.style.top  = '-9999px';
       }
-      contentEl.innerHTML = html;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      contentEl.replaceChildren(...Array.from(doc.body.childNodes));
       lastShownKey = renderKey;
     }
 

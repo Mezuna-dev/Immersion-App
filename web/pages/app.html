@@ -516,12 +516,21 @@
                         <div id="review-card-section" style="flex: 1; overflow-y: auto; padding-bottom: 1rem;">
                             <div class="mb-2" style="display: flex; align-items: center; justify-content: space-between;">
                                 <h1 style="animation: fadeIn 0.6s ease; margin: 0;">Review</h1>
-                                <div id="review-card-counts" style="display: flex; gap: 0.75rem; font-size: 1.05rem; font-weight: 700; animation: fadeIn 0.6s ease;">
-                                    <span id="review-count-new" title="New" style="color: #4a90d9;">0</span>
-                                    <span style="color: var(--text-muted);">+</span>
-                                    <span id="review-count-learning" title="Learning" style="color: #e05454;">0</span>
-                                    <span style="color: var(--text-muted);">+</span>
-                                    <span id="review-count-review" title="Review" style="color: #4dbf7a;">0</span>
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <div id="review-card-counts" style="display: flex; gap: 0.75rem; font-size: 1.05rem; font-weight: 700; animation: fadeIn 0.6s ease;">
+                                        <span id="review-count-new" title="New" style="color: #4a90d9;">0</span>
+                                        <span style="color: var(--text-muted);">+</span>
+                                        <span id="review-count-learning" title="Learning" style="color: #e05454;">0</span>
+                                        <span style="color: var(--text-muted);">+</span>
+                                        <span id="review-count-review" title="Review" style="color: #4dbf7a;">0</span>
+                                    </div>
+                                    <div style="position: relative;">
+                                        <button id="review-menu-btn" onclick="toggleReviewMenu(event)" style="background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 1.1rem; line-height: 1; padding: 0.2rem 0.55rem; cursor: pointer; transition: background 0.12s, color 0.12s;" title="Card options">⋯</button>
+                                        <div id="review-card-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 6px); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; min-width: 10rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 999; overflow: hidden;">
+                                            <div class="review-menu-item" onclick="editReviewCard()">Edit Card</div>
+                                            <div class="review-menu-item" onclick="deleteReviewCard()" style="color: #e74c3c;">Delete Card</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: center;">
@@ -706,95 +715,110 @@
                             </div>
                         </div>
 
-                        <!-- Media Log + Categories -->
-                        <div class="row mb-4">
-                            <div class="col-md-7 mb-4 mb-md-0">
-                                <div class="card dash-card" style="height: 100%;">
-                                    <div class="card-body text-white">
-                                        <div class="d-flex justify-content-between align-items-center mb-3">
-                                            <span class="dash-section-title">Media Log</span>
-                                            <div class="d-flex gap-2">
-                                                <button class="btn btn-dark btn-sm" onclick="showFullMediaLog()">Full Log</button>
-                                                <button class="btn btn-dark btn-accent btn-sm" onclick="showMediaEntryForm()">+ Add Entry</button>
-                                            </div>
+                        <!-- Media Library -->
+                        <div class="card dash-card mb-4">
+                            <div class="card-body text-white">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="dash-section-title">Media Library</span>
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="showAddItemForm()">+ Add Item</button>
+                                </div>
+
+                                <!-- Status filter pills -->
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    <button class="media-status-pill active" data-status="all" onclick="setMediaStatusFilter('all')">All</button>
+                                    <button class="media-status-pill" data-status="watching" onclick="setMediaStatusFilter('watching')">Watching</button>
+                                    <button class="media-status-pill" data-status="completed" onclick="setMediaStatusFilter('completed')">Completed</button>
+                                    <button class="media-status-pill" data-status="dropped" onclick="setMediaStatusFilter('dropped')">Dropped</button>
+                                    <button class="media-status-pill" data-status="plan_to_watch" onclick="setMediaStatusFilter('plan_to_watch')">Plan to Watch</button>
+                                </div>
+
+                                <!-- Search + category filter -->
+                                <div class="d-flex gap-2 mb-3">
+                                    <input type="text" class="form-control settings-input" id="media-library-search" placeholder="Search titles…" oninput="renderMediaLibrary()" style="font-size: 0.86rem;">
+                                    <select class="form-control dash-select" id="media-library-cat-filter" onchange="renderMediaLibrary()" style="font-size: 0.86rem; min-width: 9rem; width: auto;">
+                                        <option value="">All types</option>
+                                    </select>
+                                </div>
+
+                                <!-- Add Item Form -->
+                                <div id="media-add-item-form" style="display: none;" class="mb-3 p-3 media-form-panel">
+                                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.6rem;">Add Item</div>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        <div style="flex: 2; min-width: 12rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Title *</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-title" placeholder="e.g. Attack on Titan" style="font-size: 0.88rem;">
                                         </div>
-                                        <div id="media-entry-form" style="display: none;" class="mb-3 p-3">
-                                            <div class="d-flex flex-wrap gap-2 align-items-end">
-                                                <div style="flex: 2; min-width: 12rem;">
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Title</label>
-                                                    <input type="text" class="form-control settings-input" id="media-entry-title" placeholder="e.g. Demon Slayer" style="font-size: 0.88rem;">
-                                                </div>
-                                                <div style="min-width: 10rem;">
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Category</label>
-                                                    <select class="form-control dash-select" id="media-entry-category" style="font-size: 0.88rem;">
-                                                        <option value="0">— None —</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Hours <span style="color: var(--text-muted); opacity: 0.6;">(opt)</span></label>
-                                                    <input type="number" class="form-control settings-input" id="media-entry-hours" min="0" placeholder="0" style="width: 5rem; font-size: 0.88rem;">
-                                                </div>
-                                                <div>
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Minutes <span style="color: var(--text-muted); opacity: 0.6;">(opt)</span></label>
-                                                    <input type="number" class="form-control settings-input" id="media-entry-minutes" min="0" max="59" placeholder="0" style="width: 5rem; font-size: 0.88rem;">
-                                                </div>
-                                                <div>
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Date</label>
-                                                    <input type="date" class="form-control settings-input" id="media-entry-date" style="width: 10rem; font-size: 0.88rem;">
-                                                </div>
-                                                <button class="btn btn-dark btn-accent btn-sm" onclick="submitMediaEntry()" style="height: 2.4rem;">Add</button>
-                                                <button class="btn btn-dark btn-sm" onclick="hideMediaEntryForm()" style="height: 2.4rem;">Cancel</button>
-                                            </div>
+                                        <div style="min-width: 9rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Category</label>
+                                            <select class="form-control dash-select" id="media-add-item-cat" style="font-size: 0.88rem;">
+                                                <option value="0">— None —</option>
+                                            </select>
                                         </div>
-                                        <div id="media-entries-list" style="max-height: 380px; overflow-y: auto;"></div>
+                                        <div style="min-width: 9rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Status</label>
+                                            <select class="form-control dash-select" id="media-add-item-status" style="font-size: 0.88rem;">
+                                                <option value="watching">Watching</option>
+                                                <option value="completed">Completed</option>
+                                                <option value="dropped">Dropped</option>
+                                                <option value="plan_to_watch">Plan to Watch</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        <div>
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Progress</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-prog" placeholder="e.g. 1" style="width: 6rem; font-size: 0.88rem;">
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Total</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-progmax" placeholder="e.g. 75" style="width: 6rem; font-size: 0.88rem;">
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Date Started</label>
+                                            <input type="date" class="form-control settings-input" id="media-add-item-started" style="width: 9.5rem; font-size: 0.88rem;">
+                                        </div>
+                                        <div style="flex: 1; min-width: 12rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Notes</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-notes" placeholder="Optional notes" style="font-size: 0.88rem;">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-dark btn-accent btn-sm" onclick="submitAddMediaItem()">Add Item</button>
+                                        <button class="btn btn-dark btn-sm" onclick="hideAddItemForm()" style="color: var(--text-muted);">Cancel</button>
                                     </div>
                                 </div>
+
+                                <!-- Library list -->
+                                <div id="media-library-list"></div>
                             </div>
-                            <div class="col-md-5">
-                                <div class="card dash-card" style="height: 100%;">
-                                    <div class="card-body text-white">
-                                        <div class="d-flex justify-content-between align-items-center mb-3">
-                                            <span class="dash-section-title">Categories</span>
-                                            <button class="btn btn-dark btn-accent btn-sm" onclick="showCreateMediaCategoryForm()">+ New</button>
+                        </div>
+
+                        <!-- Categories -->
+                        <div class="card dash-card mb-4">
+                            <div class="card-body text-white">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="dash-section-title">Media Categories</span>
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="showCreateMediaCategoryForm()">+ New</button>
+                                </div>
+                                <div id="media-create-category-form" style="display: none;" class="mb-3">
+                                    <div class="d-flex gap-2 align-items-end">
+                                        <div style="flex: 1;">
+                                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Name</label>
+                                            <input type="text" class="form-control settings-input" id="media-new-category-name" placeholder="e.g. Manga" style="font-size: 0.88rem;">
                                         </div>
-                                        <div id="media-create-category-form" style="display: none;" class="mb-3">
-                                            <div class="d-flex gap-2 align-items-end">
-                                                <div style="flex: 1;">
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Name</label>
-                                                    <input type="text" class="form-control settings-input" id="media-new-category-name" placeholder="e.g. Manga" style="font-size: 0.88rem;">
-                                                </div>
-                                                <div>
-                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Color</label>
-                                                    <input type="color" id="media-new-category-color" value="#9067C6" style="width: 3rem; height: 2.4rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
-                                                </div>
-                                                <button class="btn btn-dark btn-accent btn-sm" onclick="submitCreateMediaCategory()" style="height: 2.4rem;">Add</button>
-                                                <button class="btn btn-dark btn-sm" onclick="hideCreateMediaCategoryForm()" style="height: 2.4rem;">Cancel</button>
-                                            </div>
+                                        <div>
+                                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Color</label>
+                                            <input type="color" id="media-new-category-color" value="#9067C6" style="width: 3rem; height: 2.4rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
                                         </div>
-                                        <div id="media-category-list" style="max-height: 380px; overflow-y: auto;"></div>
+                                        <button class="btn btn-dark btn-accent btn-sm" onclick="submitCreateMediaCategory()" style="height: 2.4rem;">Add</button>
+                                        <button class="btn btn-dark btn-sm" onclick="hideCreateMediaCategoryForm()" style="height: 2.4rem;">Cancel</button>
                                     </div>
                                 </div>
+                                <div id="media-category-list" style="max-height: 320px; overflow-y: auto;"></div>
                             </div>
                         </div>
                     </div><!-- /tab-pane media tracker -->
                     </div><!-- /tab-content -->
-
-                    <!-- Full Media Log Modal -->
-                    <div id="full-media-log-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:9999; align-items:center; justify-content:center;">
-                        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; width:min(92vw,720px); max-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 56px rgba(0,0,0,0.7);">
-                            <div class="d-flex justify-content-between align-items-center p-3" style="border-bottom:1px solid var(--border);">
-                                <span class="dash-section-title" style="margin:0;">Full Media Log</span>
-                                <button class="btn btn-sm" onclick="hideFullMediaLog()" style="color:var(--text-muted); font-size:1rem; line-height:1; padding:0.2rem 0.5rem; background:transparent; border:none;">✕</button>
-                            </div>
-                            <div class="d-flex gap-2 p-3" style="border-bottom:1px solid var(--border);">
-                                <input type="text" id="full-media-log-search" class="form-control settings-input" placeholder="Search titles…" oninput="renderFullMediaLog()" style="font-size:0.86rem;">
-                                <select id="full-log-category-filter" class="form-control dash-select" onchange="renderFullMediaLog()" style="font-size:0.86rem; min-width:9rem; width:auto;">
-                                    <option value="">All types</option>
-                                </select>
-                            </div>
-                            <div id="full-media-log-list" style="overflow-y:auto; padding:0.75rem 1rem; flex:1;"></div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- ── Settings View ──────────────────────────────── -->
