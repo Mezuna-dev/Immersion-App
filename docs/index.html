@@ -13,20 +13,21 @@
     :root {
       --accent:       #aa00ff;
       --accent-dark:  #7f00bf;
-      --accent-light: #cc66ff;
-      --accent-dim:   rgba(170, 0, 255, 0.10);
-      --accent-glow:  rgba(170, 0, 255, 0.25);
-      --bg:           #0d0a14;
-      --bg-surface:   #17112a;
-      --bg-card:      #1e1535;
-      --bg-card-hover:#251a3e;
-      --border:       rgba(170, 0, 255, 0.18);
-      --text-1:       #f0ebff;
-      --text-2:       #b8a8d8;
-      --text-3:       #7a6a9a;
-      --green:        #22c55e;
-      --blue:         #60a5fa;
-      --amber:        #fbbf24;
+      --accent-light: #9333ea;
+      --accent-dim:   rgba(170, 0, 255, 0.08);
+      --accent-glow:  rgba(170, 0, 255, 0.18);
+      --bg:           #f2f0ff;
+      --bg-surface:   #ffffff;
+      --bg-card:      #ffffff;
+      --bg-card-hover:#f8f5ff;
+      --border:       rgba(0, 0, 0, 0.08);
+      --border-md:    rgba(0, 0, 0, 0.11);
+      --text-1:       #1a1133;
+      --text-2:       #6b5f8a;
+      --text-3:       #a898c8;
+      --green:        #16a34a;
+      --blue:         #2563eb;
+      --amber:        #d97706;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -41,7 +42,7 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    a { color: var(--accent-light); text-decoration: none; }
+    a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
     /* ── NAV ── */
@@ -54,20 +55,22 @@
       justify-content: space-between;
       padding: 0 2rem;
       height: 60px;
-      background: rgba(13, 10, 20, 0.85);
+      background: rgba(255, 255, 255, 0.9);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1.5px solid var(--border-md);
+      box-shadow: 0 2px 12px rgba(170, 0, 255, 0.06);
     }
 
     .nav-brand {
       display: flex;
       align-items: center;
       gap: 0.6rem;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 1.05rem;
-      color: var(--text-1);
+      color: var(--accent);
       text-decoration: none;
+      letter-spacing: -0.02em;
     }
     .nav-brand:hover { text-decoration: none; }
 
@@ -80,7 +83,7 @@
     .nav-links a {
       color: var(--text-2);
       font-size: 0.9rem;
-      font-weight: 500;
+      font-weight: 600;
       transition: color 0.15s;
     }
     .nav-links a:hover { color: var(--text-1); text-decoration: none; }
@@ -89,15 +92,17 @@
       display: flex;
       align-items: center;
       gap: 0.4rem;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.35rem 0.85rem;
+      background: var(--bg);
+      border: 1.5px solid var(--border-md);
+      border-bottom: 3px solid var(--border-md);
+      border-radius: 10px;
+      padding: 0.32rem 0.85rem;
       font-size: 0.85rem;
+      font-weight: 600;
       color: var(--text-2) !important;
       transition: border-color 0.15s, color 0.15s;
     }
-    .nav-github:hover { border-color: var(--accent); color: var(--text-1) !important; }
+    .nav-github:hover { border-color: var(--accent); color: var(--accent) !important; text-decoration: none; }
 
     /* ── HERO ── */
     .hero {
@@ -111,8 +116,9 @@
       position: absolute;
       inset: 0;
       background:
-        radial-gradient(ellipse 70% 55% at 50% -10%, rgba(170, 0, 255, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 30% at 80% 80%, rgba(100, 0, 200, 0.10) 0%, transparent 60%);
+        radial-gradient(ellipse 80% 60% at 50% -5%, rgba(170, 0, 255, 0.12) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 10% 90%, rgba(170, 0, 255, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(100, 0, 200, 0.06) 0%, transparent 60%);
       pointer-events: none;
     }
 
@@ -121,12 +127,13 @@
       align-items: center;
       gap: 0.4rem;
       background: var(--accent-dim);
-      border: 1px solid rgba(170, 0, 255, 0.3);
+      border: 1.5px solid rgba(170, 0, 255, 0.25);
+      border-bottom: 3px solid rgba(170, 0, 255, 0.25);
       border-radius: 100px;
       padding: 0.3rem 0.9rem;
       font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--accent-light);
+      font-weight: 700;
+      color: var(--accent);
       letter-spacing: 0.03em;
       margin-bottom: 1.8rem;
     }
@@ -137,10 +144,11 @@
       line-height: 1.1;
       letter-spacing: -0.03em;
       margin-bottom: 1.2rem;
+      color: var(--text-1);
     }
 
     .hero h1 span {
-      background: linear-gradient(135deg, var(--accent-light) 0%, #ff66cc 100%);
+      background: linear-gradient(135deg, #aa00ff 0%, #7c3aed 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -161,41 +169,47 @@
       gap: 0.9rem;
     }
 
+    /* Duolingo-style 3D pill buttons matching the app */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      border-radius: 10px;
-      padding: 0.75rem 1.5rem;
+      border-radius: 100px;
+      padding: 0.75rem 1.75rem;
       font-size: 0.95rem;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
-      transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+      transition: filter 0.12s, transform 0.1s, border-bottom-width 0.1s;
       text-decoration: none !important;
       border: none;
+      letter-spacing: 0.01em;
     }
-    .btn:hover { transform: translateY(-2px); text-decoration: none !important; }
+    .btn:hover { text-decoration: none !important; }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--accent) 0%, #7f00bf 100%);
+      background: var(--accent);
       color: #fff;
-      box-shadow: 0 4px 20px var(--accent-glow);
+      border-bottom: 4px solid var(--accent-dark);
     }
-    .btn-primary:hover { box-shadow: 0 6px 28px rgba(170, 0, 255, 0.45); }
+    .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn-primary:active { border-bottom-width: 0; transform: translateY(4px); }
 
     .btn-secondary {
-      background: var(--bg-card);
+      background: #ffffff;
       color: var(--text-1);
-      border: 1px solid var(--border);
+      border: 1.5px solid var(--border-md);
+      border-bottom: 4px solid var(--border-md);
     }
-    .btn-secondary:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+    .btn-secondary:hover { filter: brightness(0.97); transform: translateY(-1px); }
+    .btn-secondary:active { border-bottom-width: 0; transform: translateY(4px); }
 
     .btn-ghost {
       background: transparent;
       color: var(--text-2);
-      border: 1px solid var(--border);
+      border: 1.5px solid var(--border-md);
+      border-bottom: 4px solid var(--border-md);
     }
-    .btn-ghost:hover { color: var(--text-1); border-color: var(--text-3); }
+    .btn-ghost:hover { color: var(--text-1); border-color: var(--accent); }
 
     /* ── APP PREVIEW ── */
     .preview-wrap {
@@ -228,7 +242,7 @@
     /* App shell: sidebar + main */
     .preview-body {
       display: grid;
-      grid-template-columns: 184px 1fr;
+      grid-template-columns: 170px 1fr;
       min-height: 340px;
       background: #f2f0ff; /* real --bg */
     }
@@ -236,38 +250,64 @@
     /* Sidebar: white, right border */
     .preview-sidebar {
       background: #ffffff;
-      border-right: 1.5px solid rgba(0,0,0,0.09);
+      border-right: 1.5px solid rgba(0,0,0,0.11);
+      box-shadow: 2px 0 12px rgba(0,0,0,0.05);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
+    .preview-toggle {
+      background: #ffffff;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      border-bottom: 3px solid rgba(0,0,0,0.18);
+      border-radius: 50px;
+      color: #6b5f8a;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 0.42rem 1rem;
+      margin: 0.6rem 1rem 0.1rem;
+      cursor: default;
+      text-align: center;
+      display: block;
+      line-height: 1.4;
+    }
+
     .preview-brand {
-      font-size: 0.9rem;
+      font-size: 1.05rem;
       font-weight: 900;
       color: #aa00ff;
-      letter-spacing: -0.03em;
-      padding: 1rem 1rem 0.85rem;
-      border-bottom: 1.5px solid rgba(0,0,0,0.07);
+      letter-spacing: -0.035em;
+      padding: 0.75rem 0.75rem 0.8rem 1.9rem;
+      line-height: 1.2;
+      text-align: left;
     }
 
     .preview-nav {
-      padding: 0.6rem 0.5rem;
+      padding: 0.4rem 1rem;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 4px;
     }
 
     .preview-nav-item {
-      border-radius: 10px;
-      padding: 0.48rem 0.7rem;
-      font-size: 0.78rem;
-      font-weight: 600;
+      border-radius: 50px;
+      padding: 0.52rem 0.9rem;
+      font-size: 0.8rem;
+      font-weight: 700;
       color: #6b5f8a;
+      background: #ffffff;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      border-bottom: 3px solid rgba(0,0,0,0.18);
+      cursor: default;
+      text-align: left;
+      display: block;
     }
     .preview-nav-item.active {
       background: rgba(170,0,255,0.08);
       color: #aa00ff;
+      border-color: rgba(170,0,255,0.18);
+      border-bottom-color: rgba(170,0,255,0.28);
     }
 
     /* Main content area */
@@ -285,6 +325,23 @@
       color: #1a1133;
       letter-spacing: -0.03em;
       margin-bottom: 0.1rem;
+    }
+
+    /* 3D pill button matching the real app's .btn-accent */
+    .preview-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: #aa00ff;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-radius: 100px;
+      padding: 0.38rem 0.9rem;
+      border-bottom: 3px solid #7f00bf;
+      letter-spacing: 0.01em;
+      cursor: default;
+      user-select: none;
     }
 
     /* KPI grid */
@@ -374,7 +431,7 @@
     /* Retention rings */
     .preview-rings {
       display: flex;
-      gap: 1rem;
+      justify-content: space-evenly;
       align-items: flex-start;
     }
 
@@ -470,7 +527,7 @@
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--accent-light);
+      color: var(--accent);
       margin-bottom: 0.6rem;
     }
 
@@ -480,6 +537,7 @@
       letter-spacing: -0.02em;
       line-height: 1.15;
       margin-bottom: 0.8rem;
+      color: var(--text-1);
     }
 
     .section-desc {
@@ -497,32 +555,36 @@
     }
 
     .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
+      background: #ffffff;
+      border: 1.5px solid var(--border-md);
+      border-top: none;
       border-radius: 16px;
       padding: 1.6rem;
-      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+      transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
       position: relative;
       overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 #fff;
     }
     .feature-card::before {
       content: '';
       position: absolute;
-      inset: 0;
-      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(170,0,255,0.06) 0%, transparent 70%);
-      pointer-events: none;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      border-radius: 16px 16px 0 0;
     }
     .feature-card:hover {
-      border-color: rgba(170,0,255,0.35);
-      background: var(--bg-card-hover);
+      box-shadow: 0 4px 20px rgba(170, 0, 255, 0.12), 0 2px 8px rgba(0,0,0,0.06);
       transform: translateY(-3px);
+      border-color: rgba(170,0,255,0.2);
     }
 
     .feature-icon {
       width: 44px; height: 44px;
       border-radius: 12px;
       background: var(--accent-dim);
-      border: 1px solid rgba(170,0,255,0.25);
+      border: 1.5px solid rgba(170,0,255,0.18);
+      border-bottom: 3px solid rgba(170,0,255,0.18);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -559,7 +621,7 @@
     }
     .feature-list li::before {
       content: '›';
-      color: var(--accent-light);
+      color: var(--accent);
       font-weight: 700;
       flex-shrink: 0;
       margin-top: 0.05em;
@@ -575,18 +637,28 @@
 
     /* Demo context area around the popup */
     .ext-demo {
-      background: #f5f5f5;
-      border: 1px solid rgba(0,0,0,0.10);
-      border-radius: 12px;
+      background: #ffffff;
+      border: 1.5px solid var(--border-md);
+      border-top: none;
+      border-radius: 16px;
       padding: 1.5rem;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       font-family: 'Inter', system-ui, sans-serif;
+      position: relative;
+      overflow: hidden;
+    }
+    .ext-demo::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), #a78bfa);
     }
 
     .ext-demo-text {
       font-size: 1.25rem;
       line-height: 2.2;
-      color: #333;
+      color: var(--text-1);
       margin-bottom: 1rem;
     }
 
@@ -756,16 +828,16 @@
     .step-num {
       width: 28px; height: 28px;
       border-radius: 50%;
-      background: var(--accent-dim);
-      border: 1px solid rgba(170,0,255,0.3);
-      color: var(--accent-light);
+      background: var(--accent);
+      color: #fff;
       font-size: 0.78rem;
-      font-weight: 700;
+      font-weight: 800;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
       margin-top: 0.1em;
+      box-shadow: 0 2px 0 var(--accent-dark);
     }
 
     .step-body strong {
@@ -782,9 +854,9 @@
 
     /* ── DOWNLOAD ── */
     .download-section {
-      background: var(--bg-surface);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      border-top: 1.5px solid var(--border-md);
+      border-bottom: 1.5px solid var(--border-md);
     }
 
     .download-grid {
@@ -795,17 +867,29 @@
     }
 
     .download-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
+      background: #ffffff;
+      border: 1.5px solid var(--border-md);
+      border-top: none;
       border-radius: 16px;
       padding: 1.6rem;
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
-      transition: border-color 0.2s, transform 0.2s;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .download-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      border-radius: 16px 16px 0 0;
     }
     .download-card:hover {
-      border-color: rgba(170,0,255,0.35);
+      box-shadow: 0 4px 20px rgba(170,0,255,0.12);
       transform: translateY(-2px);
     }
 
@@ -813,16 +897,16 @@
       font-size: 2rem;
       font-weight: 800;
       letter-spacing: -0.03em;
-      color: #ffffff;
+      color: var(--text-1);
       margin-bottom: 0.25rem;
     }
 
     .dl-file {
       font-family: 'Courier New', monospace;
       font-size: 0.78rem;
-      color: var(--text-3);
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid rgba(170,0,255,0.15);
       border-radius: 6px;
       padding: 0.3rem 0.6rem;
     }
@@ -833,51 +917,24 @@
     }
 
     /* ── SOURCE ── */
-    .source-block {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.25rem 1.5rem;
-      margin-top: 2rem;
-    }
-
-    .source-block h3 {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-1);
-      margin-bottom: 0.6rem;
-    }
-
-    .code-block {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      font-family: 'Courier New', monospace;
-      font-size: 0.82rem;
-      color: var(--text-2);
-      overflow-x: auto;
-      line-height: 1.7;
-    }
-
-    .code-block .cmd { color: var(--accent-light); }
-    .code-block .cmt { color: var(--text-3); }
 
     /* ── FOOTER ── */
     footer {
       padding: 3rem 1.5rem;
       text-align: center;
-      border-top: 1px solid var(--border);
+      background: #ffffff;
+      border-top: 1.5px solid var(--border-md);
     }
 
     .footer-logo {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 1rem;
-      color: var(--text-2);
+      color: var(--accent);
       margin-bottom: 0.75rem;
+      letter-spacing: -0.02em;
     }
 
     .footer-links {
@@ -890,6 +947,7 @@
 
     .footer-links a {
       font-size: 0.85rem;
+      font-weight: 500;
       color: var(--text-3);
     }
     .footer-links a:hover { color: var(--text-2); }
@@ -900,7 +958,7 @@
     }
 
     /* ── UTILITIES ── */
-    .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+    .divider { border: none; border-top: 1.5px solid var(--border-md); margin: 0; }
 
     .tag {
       display: inline-flex;
@@ -908,7 +966,7 @@
       gap: 0.3rem;
       background: var(--accent-dim);
       border: 1px solid rgba(170,0,255,0.2);
-      color: var(--accent-light);
+      color: var(--accent);
       border-radius: 6px;
       padding: 0.15rem 0.55rem;
       font-size: 0.75rem;
@@ -972,8 +1030,7 @@
   <h1>Your all-in-one<br><span>immersion learning suite.</span></h1>
 
   <p class="hero-sub">
-    A desktop app for language learners with spaced-repetition flashcards,
-    Anki deck importing, detailed statistics, and a hover-dictionary browser extension.
+    Flashcards, immersion tracking, a media library, and a hover dictionary. One app, fully offline, totally free.
   </p>
 
   <div class="btn-row">
@@ -1010,7 +1067,9 @@
       <div class="preview-body">
         <!-- White sidebar -->
         <div class="preview-sidebar">
-          <div class="preview-brand">Immersion Suite</div>
+          <div class="preview-toggle">☰</div>
+          <div class="preview-brand">Immersion<br>Suite</div>
+          <div style="height:1px;background:rgba(0,0,0,0.07);margin:0 1rem;"></div>
           <div class="preview-nav">
             <div class="preview-nav-item active">Dashboard</div>
             <div class="preview-nav-item">SRS</div>
@@ -1115,10 +1174,9 @@
 <section class="section" id="features">
   <div class="section-inner">
     <div class="section-label">Features</div>
-    <h2 class="section-title">Everything you need to learn a language</h2>
+    <h2 class="section-title">Every Immersion Tool You Need</h2>
     <p class="section-desc">
-      Immersion Suite gives you professional-grade SRS tools in a clean, fast desktop app. It's designed to be
-      completely free, no account required.
+      No subscriptions, no cloud, no nonsense. Just the tools you actually need, running on your machine.
     </p>
 
     <div class="feature-grid">
@@ -1126,8 +1184,7 @@
         <div class="feature-icon">🧠</div>
         <div class="feature-title">Spaced Repetition (SRS)</div>
         <div class="feature-desc">
-          SM2-based scheduling keeps reviews efficient. Study cards exactly when you need to,
-          not before, not after.
+          Reviews show up when you're about to forget them, not randomly. SM2 scheduling handles the timing so you don't have to think about it.
         </div>
         <ul class="feature-list">
           <li>Configurable learning &amp; relearning steps</li>
@@ -1141,8 +1198,7 @@
         <div class="feature-icon">📦</div>
         <div class="feature-title">Anki Import</div>
         <div class="feature-desc">
-          Import your existing Anki decks including card templates, media, and full
-          review history.
+          Already using Anki? Bring your decks over. Templates, media, and full review history all come with.
         </div>
         <ul class="feature-list">
           <li>Supports old and new .apkg formats</li>
@@ -1156,8 +1212,7 @@
         <div class="feature-icon">📊</div>
         <div class="feature-title">Statistics &amp; Dashboard</div>
         <div class="feature-desc">
-          Visualize your progress with a heatmap, retention charts, and per-deck breakdowns.
-          Know exactly where you stand.
+          See your review history, retention rates, and streaks at a glance. Hard to slack off when the heatmap's staring at you.
         </div>
         <ul class="feature-list">
           <li>Review activity heatmap</li>
@@ -1167,11 +1222,25 @@
       </div>
 
       <div class="feature-card">
+        <div class="feature-icon">⏱️</div>
+        <div class="feature-title">Immersion Tracking</div>
+        <div class="feature-desc">
+          Timer, manual logs, and a full media library. Track the anime you're watching, the books you're reading, and how many hours you've actually put in.
+        </div>
+        <ul class="feature-list">
+          <li>Built-in timer with category tagging</li>
+          <li>Manual log entry for past sessions</li>
+          <li>Pie chart breakdown by category</li>
+          <li>Media library with watching status</li>
+          <li>Anime &amp; manga search via MyAnimeList</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
         <div class="feature-icon">🗂️</div>
         <div class="feature-title">Deck &amp; Card Management</div>
         <div class="feature-desc">
-          Create custom card types with your own fields and HTML/CSS templates or just
-          import your Anki setup.
+          Build card types from scratch with custom fields and HTML/CSS templates, or just import your existing Anki setup and go.
         </div>
         <ul class="feature-list">
           <li>Multiple decks with per-deck settings</li>
@@ -1200,8 +1269,7 @@
         <div class="feature-icon">🔒</div>
         <div class="feature-title">Private by Design</div>
         <div class="feature-desc">
-          No accounts, no subscriptions, no telemetry. All your data lives in a local
-          SQLite database you own and control.
+          No accounts, no cloud sync, no telemetry. Your data is a SQLite file on your own machine. That's it.
         </div>
         <ul class="feature-list">
           <li>Fully offline</li>
@@ -1221,10 +1289,9 @@
     <div class="ext-grid">
       <div>
         <div class="section-label">Browser Extension</div>
-        <h2 class="section-title">Look up words without leaving the page</h2>
+        <h2 class="section-title">Look up any word without leaving the page</h2>
         <p class="section-desc" style="margin-bottom:1.5rem;">
-          The Immersion Suite extension adds a hover dictionary to any webpage. Hold Shift,
-          hover over Japanese text, and a popup appears with the reading, part of speech, and definition.
+          Hold Shift and hover over Japanese text anywhere in your browser. A popup shows the reading, POS, and definition instantly.
         </p>
 
         <div class="ext-steps">
@@ -1232,7 +1299,7 @@
             <div class="step-num">1</div>
             <div class="step-body">
               <strong>Install the desktop app</strong>
-              <p>The extension is a thin UI. The desktop app does the heavy lifting (dictionary lookup, SRS).</p>
+              <p>The extension talks to the app running on your machine. The app handles all the dictionary lookups.</p>
             </div>
           </div>
           <div class="ext-step">
@@ -1246,7 +1313,7 @@
             <div class="step-num">3</div>
             <div class="step-body">
               <strong>Hold Shift and hover</strong>
-              <p>The extension talks to the desktop over a local WebSocket. No data leaves your machine.</p>
+              <p>Everything stays local. The extension and app communicate over a WebSocket on your own machine.</p>
             </div>
           </div>
         </div>
@@ -1286,7 +1353,7 @@
           </div>
           <div class="popup-source">Jitendex</div>
         </div>
-        <p style="font-size:0.78rem;color:#666;margin-top:0.75rem;">
+        <p style="font-size:0.78rem;color:var(--text-3);margin-top:0.75rem;">
           Hold Shift + hover over any Japanese text → instant lookup
         </p>
       </div>
@@ -1336,15 +1403,6 @@
       </div>
     </div>
 
-    <!-- Build from source -->
-    <div class="source-block">
-      <h3>Build from source (all platforms)</h3>
-      <div class="code-block">
-        <span class="cmt"># Requires Python 3.10+, PyQt6, PyQt6-WebEngine, zstandard</span><br>
-        <span class="cmd">pip install</span> -r requirements.txt<br>
-        <span class="cmd">cd</span> src &amp;&amp; <span class="cmd">python</span> gui.py
-      </div>
-    </div>
   </div>
 </section>
 
