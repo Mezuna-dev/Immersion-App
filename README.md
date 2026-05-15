@@ -6,7 +6,7 @@
 
 **The all-in-one desktop toolkit for language immersion learners.**
 
-Flashcards · Immersion tracking · Statistics · Hover dictionary
+Flashcards · Immersion tracking · Statistics · Popup dictionary
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-aa00ff.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.3.0-aa00ff)](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest)
